@@ -25,6 +25,7 @@
     "propagate_min": { "type": "number", "title": "전체 치환 최소 길이 (숫자·비밀값)", "description": "키로 찾은 값이 이 길이 이상이면 프롬프트의 다른 곳에서도 가린다", "default": 6, "min": 1 },
     "propagate_min_text": { "type": "number", "title": "전체 치환 최소 길이 (개인정보 문자 값)", "description": "이름 등 개인정보 키로 찾은 문자 값이 이 길이 이상이면 다른 곳에서도 가린다", "default": 2, "min": 1 },
     "partial_keep": { "type": "number", "title": "일부 노출 글자 수", "description": "계좌·사업자번호·이메일 아이디 등에서 앞뒤로 보여 줄 글자 수", "default": 2, "min": 0 },
+    "patterns_file": { "type": "file", "title": "사용자 정규식 파일", "description": "[{ \"label\": \"사번\", \"regex\": \"EMP\\\\d{6}\", \"partial\": false }] 형식의 JSON 파일 절대 경로. 비우면 사용 안 함. 읽을 수 없거나 형식이 틀리면 전송을 막는다" },
     "custom_keys": { "type": "string", "multiple": true, "title": "추가로 가릴 키 이름", "description": "대소문자·_·-는 무시한다. 값은 [키이름#n]으로 가린다", "default": [] }
   }
 }

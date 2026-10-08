@@ -253,3 +253,15 @@ test('제외 구간: 여러 줄', async ($, on) => {
   const [seen] = await submitAll($, on, ['###line1\npw=abcdef###'])
   expect(seen).toBe('line1\npw=abcdef')
 })
+
+const MISSING = { patterns_file: '/nonexistent/privacy-mask-patterns.json' }
+
+test('설정 오류: 정규식 파일을 못 읽으면 전송을 막는다', { options: MISSING }, async $ => {
+  const result = await $.prompt.submit({ text: 'hello' })
+  expect(result.drop).toBe('privacy-mask: 정규식 파일을 읽을 수 없습니다 (/nonexistent/privacy-mask-patterns.json)')
+})
+
+test('설정 오류여도 전체를 ###로 감싸면 보낸다', { options: MISSING }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['###tel=010-1234-5678###'])
+  expect(seen).toBe('tel=010-1234-5678')
+})

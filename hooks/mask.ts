@@ -3,6 +3,7 @@ import {
   type Ctx,
   isCustomKey,
   isSecretKey,
+  keepEnds,
   type KeyKind,
   PII_KEY_IDS,
   PII_KEY_MATCHERS,
@@ -41,6 +42,9 @@ export const isAllBypass = (segments: Segment[]) =>
   segments.some(s => s.raw) && segments.every(s => s.raw || !s.text.trim())
 
 export const joinSegments = (segments: Segment[]) => segments.map(s => s.text).join('')
+
+const PLACEHOLDER = /\[[^[\]\n]*#\d+\]/
+const PLACEHOLDER_ONLY = new RegExp(`^${PLACEHOLDER.source}$`)
 
 // 번호는 프롬프트마다 1부터. 호출이 끝나면 상태를 남기지 않는다.
 export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
@@ -121,5 +125,16 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
     )
   }
   run(PII_RULES)
+  // 사용자 정규식은 마지막. 자리표시자를 먼저 대안으로 두어, 그 자리에서는 자리표시자가 통째로 매치돼 그대로 남게 한다
+  for (const p of config.patterns) {
+    const re = new RegExp(`${PLACEHOLDER.source}|(?:${p.source})`, 'g')
+    each(s =>
+      s.replace(re, (m: string) => {
+        if (!m || PLACEHOLDER_ONLY.test(m)) return m
+        const ph = ctx.tag(p.label, m)
+        return p.partial ? `${ph} ${keepEnds(m, config.partialKeep)}` : ph
+      }),
+    )
+  }
   return { text: joinSegments(segments), counts }
 }
