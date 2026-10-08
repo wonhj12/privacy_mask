@@ -20,6 +20,28 @@ const groupsOf = (rest: unknown[]) => {
   return rest.slice(0, end).map(x => (typeof x === 'string' ? x : ''))
 }
 
+export type Segment = { text: string; raw: boolean }
+
+// ### 바로 안쪽 양 끝이 공백·#이 아닐 때만 구분자 (### 제목, ##########와 구분). 여러 줄 가능
+const BYPASS = /(?<!#)###(?=[^\s#])([\s\S]*?[^\s#])###(?!#)/g
+
+export const splitBypass = (text: string): Segment[] => {
+  const out: Segment[] = []
+  let last = 0
+  for (const m of text.matchAll(BYPASS)) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), raw: false })
+    out.push({ text: m[1] ?? '', raw: true })
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push({ text: text.slice(last), raw: false })
+  return out
+}
+
+export const isAllBypass = (segments: Segment[]) =>
+  segments.some(s => s.raw) && segments.every(s => s.raw || !s.text.trim())
+
+export const joinSegments = (segments: Segment[]) => segments.map(s => s.text).join('')
+
 // 번호는 프롬프트마다 1부터. 호출이 끝나면 상태를 남기지 않는다.
 export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
   const counts: Record<string, number> = {}
@@ -68,11 +90,16 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
     },
   }
 
-  let out = text
+  const segments = splitBypass(text)
+  // 제외 구간은 어떤 단계에도 들어가지 않는다 (키 값 수집 포함)
+  const each = (fn: (s: string) => string) => {
+    for (const seg of segments) if (!seg.raw) seg.text = fn(seg.text)
+  }
+
   const run = (rules: Rule[]) => {
     for (const rule of rules) {
       if (rule.id !== null && !config.enabled.has(rule.id)) continue
-      out = out.replace(rule.re, (m: string, ...rest: unknown[]) => rule.apply(ctx, m, groupsOf(rest)) ?? m)
+      each(s => s.replace(rule.re, (m: string, ...rest: unknown[]) => rule.apply(ctx, m, groupsOf(rest)) ?? m))
     }
   }
 
@@ -86,11 +113,13 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
       `(?<![\\w\\[#<])(?<!<\\/)(?<!(?:key|name)\\s*=\\s*["'])${escapeRegExp(value)}(?![\\w#\\]])(?!["']?\\s*[:=])`,
       'g',
     )
-    out = out.replace(re, () => {
-      ctx.count(SECRET)
-      return ph
-    })
+    each(s =>
+      s.replace(re, () => {
+        ctx.count(SECRET)
+        return ph
+      }),
+    )
   }
   run(PII_RULES)
-  return { text: out, counts }
+  return { text: joinSegments(segments), counts }
 }

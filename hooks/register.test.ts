@@ -232,3 +232,24 @@ test('설정: 개인정보 문자 값 최소 길이 · 생년월일 키 끄기',
   const [seen] = await submitAll($, on, ['custName=홍길동 주문자 홍길동 birth=19900101'])
   expect(seen).toBe('custName=[custName#1] 주문자 홍길동 birth=19900101')
 })
+
+test('제외 구간: ###…### 안은 원문, 구분자는 지운다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###password=abc123### tel=010-1234-5678 ###a b### ###c###'])
+  expect(seen).toBe('password=abc123 tel=[전화번호#1] 010-****-5678 a b c')
+})
+
+test('제외 구간: 안의 키 값은 수집하지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###pw=abcdefg### other abcdefg'])
+  expect(seen).toBe('pw=abcdefg other abcdefg')
+})
+
+test('제외 구간: 제목·장식선·닫히지 않은 ###은 구분자가 아니다', async ($, on) => {
+  const text = '### 제목\npw=abcdef\n#### 소제목\n##########\n###열린'
+  const [seen] = await submitAll($, on, [text])
+  expect(seen).toBe('### 제목\npw=[pw#1]\n#### 소제목\n##########\n###열린')
+})
+
+test('제외 구간: 여러 줄', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###line1\npw=abcdef###'])
+  expect(seen).toBe('line1\npw=abcdef')
+})
