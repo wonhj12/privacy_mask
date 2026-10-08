@@ -204,3 +204,31 @@ test('비밀값: Cookie 헤더는 값 전체, CRLF 다음 줄은 그대로', asy
   const [seen] = await submitAll($, on, ['Cookie: SESSION=abc123; theme=dark\r\nHost: x\n"set-cookie": "a=1"'])
   expect(seen).toBe('Cookie: [쿠키#1]\r\nHost: x\n"set-cookie": "[쿠키#2]"')
 })
+
+test('개인정보 키: 이름은 다른 곳에 나와도 가리고, 기술 이름·userName은 건드리지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'custName=홍길동 주문자 홍길동 결제 cust_nm=김철수 fileName=a.txt tempName=x userName=hong',
+  ])
+  expect(seen).toBe(
+    'custName=[custName#1] 주문자 [custName#1] 결제 cust_nm=[cust_nm#1] fileName=a.txt tempName=x userName=hong',
+  )
+})
+
+test('개인정보 키: 생년월일·카드 부가정보, 짧은 숫자는 전체 치환하지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'birthDate=19900101 dob=1990-01-01 cvc=123 cardExpiry=12/29 rebirth=yes again 19900101 123',
+  ])
+  expect(seen).toBe(
+    'birthDate=[birthDate#1] dob=[dob#1] cvc=[cvc#1] cardExpiry=[cardExpiry#1] rebirth=yes again [birthDate#1] 123',
+  )
+})
+
+test('사용자 키: 대소문자·_·- 무시, 마지막 . 뒤 이름도 비교', { options: { custom_keys: ['signKey', 'orderMemo'] } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['sign_key=abcdefgh order.orderMemo=부재시연락 note=부재시연락'])
+  expect(seen).toBe('sign_key=[sign_key#1] order.orderMemo=[order.orderMemo#1] note=[order.orderMemo#1]')
+})
+
+test('설정: 개인정보 문자 값 최소 길이 · 생년월일 키 끄기', { options: { propagate_min_text: 4, enable_birth_key: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['custName=홍길동 주문자 홍길동 birth=19900101'])
+  expect(seen).toBe('custName=[custName#1] 주문자 홍길동 birth=19900101')
+})

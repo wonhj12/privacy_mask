@@ -1,5 +1,16 @@
 import { DEFAULT_CONFIG, type MaskConfig } from './config.ts'
-import { type Ctx, isSecretKey, PII_RULES, type Rule, SECRET, SECRET_RULES } from './rules.ts'
+import {
+  type Ctx,
+  isCustomKey,
+  isSecretKey,
+  type KeyKind,
+  PII_KEY_IDS,
+  PII_KEY_MATCHERS,
+  PII_RULES,
+  type Rule,
+  SECRET,
+  SECRET_RULES,
+} from './rules.ts'
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -37,18 +48,24 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
       return placeholder(label, norm)
     },
     keep: config.partialKeep,
-    keyed: (key, value) => {
+    keyed: (key, value, kind) => {
       // <entry key="password"> 뒤의 줄바꿈·들여쓰기 같은 공백뿐인 값은 비밀값이 아니다
       if (!value.trim()) return value
-      ctx.count(SECRET)
+      ctx.count(kind === 'secret' ? SECRET : '개인정보')
       const known = keyedValues.get(value)
       if (known !== undefined) return known
       const ph = placeholder(key, value)
+      // 숫자로만 된 값과 비밀값은 짧으면 다른 뜻으로 흔히 쓰여(cvc=123, flag_pw=Y) 기준을 높게 둔다
+      const min = kind === 'secret' || /^[\d.-]+$/.test(value) ? config.propagateMin : config.propagateMinText
       // 공백이 낀 값은 전체 치환하지 않는다 (줄바꿈·들여쓰기가 프롬프트 곳곳에서 바뀌는 것 방지)
-      if (value.length >= config.propagateMin && !/\s/.test(value)) keyedValues.set(value, ph)
+      if (value.length >= min && !/\s/.test(value)) keyedValues.set(value, ph)
       return ph
     },
-    isKey: key => config.enabled.has('secret_key') && isSecretKey(key),
+    keyKind: (key): KeyKind | null => {
+      if (config.enabled.has('secret_key') && isSecretKey(key)) return 'secret'
+      if (isCustomKey(config.customKeys, key)) return 'pii'
+      return PII_KEY_IDS.some(id => config.enabled.has(id) && PII_KEY_MATCHERS[id](key)) ? 'pii' : null
+    },
   }
 
   let out = text

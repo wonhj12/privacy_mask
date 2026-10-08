@@ -8,6 +8,9 @@ export const RULE_IDS = [
   'biz_no',
   'account',
   'ip',
+  'name_key',
+  'birth_key',
+  'card_extra_key',
   'private_key',
   'jwt',
   'service_token',
@@ -25,15 +28,15 @@ export type Ctx = {
   tag: (label: string, norm: string) => string
   // 일부 노출 "앞뒤 N자"의 N
   keep: number
-  // 키 이름으로 찾은 비밀값: 키 이름을 라벨로 쓰고, 같은 값은 프롬프트 전체에서 가린다
-  keyed: (key: string, value: string) => string
-  // 가릴 키인가 (켜진 키 규칙 기준)
-  isKey: (key: string) => boolean
+  // 키로 찾은 값: 키 이름을 라벨로 쓰고, 같은 값은 프롬프트 전체에서 가린다
+  keyed: (key: string, value: string, kind: KeyKind) => string
+  // 가릴 키인가, 어떤 종류인가 (켜진 키 규칙 기준). null이면 가리지 않는다
+  keyKind: (key: string) => KeyKind | null
   count: (label: string) => void
 }
 
 export type Rule = {
-  // null이면 항상 실행한다. 키 규칙은 켜고 끄기를 ctx.isKey가 판단한다
+  // null이면 항상 실행한다. 키 규칙은 켜고 끄기를 ctx.keyKind가 판단한다
   id: RuleId | null
   re: RegExp
   // null이면 오탐으로 보고 원문 유지
@@ -119,14 +122,63 @@ export const isSecretKey = (key: string) => {
   return !/user(name)?$/.test(k) && SECRET_KEY.test(k)
 }
 
+export type KeyKind = 'secret' | 'pii'
+
+// 마지막 . 뒤 이름을 _ - 공백·camelCase 경계로 나눈다: order.custName → [cust, name]
+export const keyTokens = (key: string) =>
+  (key.split('.').pop() ?? '')
+    .split(/[_\-\s]+|(?<=[a-z0-9])(?=[A-Z])/)
+    .filter(Boolean)
+    .map(t => t.toLowerCase())
+
+const NAME_OWNERS = new Set(['cust', 'customer', 'member', 'mbr', 'buyer', 'receiver', 'recipient', 'holder', 'owner', 'emp', 'employee', 'real', 'full'])
+const BIRTH = new Set(['birth', 'birthday', 'birthdate', 'birthdt', 'birthymd', 'brthdy', 'dob'])
+
+export const PII_KEY_IDS = ['name_key', 'birth_key', 'card_extra_key'] as const
+export type PiiKeyId = (typeof PII_KEY_IDS)[number]
+
+// "name"은 기술 용어(fileName·hostName)에도 쓰여서 앞에 붙는 말로 거른다. 놓친 키는 사용자 키로 보완한다
+export const PII_KEY_MATCHERS: Record<PiiKeyId, (key: string) => boolean> = {
+  name_key: key => {
+    const t = keyTokens(key)
+    const last = t.at(-1) ?? ''
+    const prev = t.at(-2) ?? ''
+    return (
+      ((last === 'name' || last === 'nm') && NAME_OWNERS.has(prev)) ||
+      new RegExp(`^(${[...NAME_OWNERS].join('|')})(name|nm)$`).test(last) ||
+      /^(성명|이름|고객명)$/.test(last)
+    )
+  },
+  birth_key: key => {
+    const t = keyTokens(key)
+    const last = t.at(-1) ?? ''
+    const prev = t.at(-2) ?? ''
+    return BIRTH.has(last) || (prev === 'birth' && /^(date|dt|day|ymd)$/.test(last)) || /생년월일$/.test(last)
+  },
+  card_extra_key: key => {
+    const t = keyTokens(key)
+    const last = t.at(-1) ?? ''
+    return /^(cvc|cvv)2?$/.test(last) || /card(exp|expiry|expdate|expiration)$/.test(t.slice(-3).join(''))
+  },
+}
+
+export const normKey = (key: string) => key.toLowerCase().replace(/[_-]/g, '')
+
+// 사용자 키는 키 전체 또는 마지막 . 뒤 이름과 비교한다 (custom은 normKey로 정규화된 값)
+export const isCustomKey = (custom: readonly string[], key: string) => {
+  const full = normKey(key)
+  const last = full.split('.').pop() ?? full
+  return custom.some(c => c === full || c === last)
+}
+
 // 따옴표는 남기고 안쪽만 가린다
-const maskValue = (ctx: Ctx, key: string, v: string) => {
+const maskValue = (ctx: Ctx, key: string, v: string, kind: KeyKind) => {
   const q = v[0]
   if ((q === '"' || q === "'") && v.length >= 2 && v.endsWith(q)) {
     const inner = v.slice(1, -1)
-    return inner ? `${q}${ctx.keyed(key, inner)}${q}` : null
+    return inner ? `${q}${ctx.keyed(key, inner, kind)}${q}` : null
   }
-  return ctx.keyed(key, v)
+  return ctx.keyed(key, v, kind)
 }
 
 // 순서가 중요하다: 비밀값 → (키로 찾은 값 전체 치환) → 개인정보 → IP. 앞 단계가 남긴 [..] 자리표시자는 뒤 규칙이 건드리지 않는다
@@ -199,24 +251,33 @@ export const SECRET_RULES: Rule[] = [
       return head + ctx.tag('쿠키', v)
     },
   },
-  // ---- 비밀값: 키 이름으로 잡는 것 ----
+  // ---- 키 이름으로 잡는 것 (비밀값·개인정보) ----
   {
     id: null,
     // <property name="password" value="..."/>
     re: /((?:name|key)\s*=\s*"([^"]+)"\s+value\s*=\s*")([^"]*)(")/g,
-    apply: (ctx, _m, g) => (ctx.isKey(g[1]) && g[2] ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => {
+      const kind = ctx.keyKind(g[1])
+      return kind && g[2] ? g[0] + ctx.keyed(g[1], g[2], kind) + g[3] : null
+    },
   },
   {
     id: null,
     // <entry key="password">...</entry>
     re: /(key\s*=\s*"([^"]+)"[^>]*>)([^<]+)(<)/g,
-    apply: (ctx, _m, g) => (ctx.isKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => {
+      const kind = ctx.keyKind(g[1])
+      return kind ? g[0] + ctx.keyed(g[1], g[2], kind) + g[3] : null
+    },
   },
   {
     id: null,
     // <password>...</password>
     re: /(<([A-Za-z0-9_.-]+)(?:\s[^>]*)?>)([^<]+)(<\/\2>)/g,
-    apply: (ctx, _m, g) => (ctx.isKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => {
+      const kind = ctx.keyKind(g[1])
+      return kind ? g[0] + ctx.keyed(g[1], g[2], kind) + g[3] : null
+    },
   },
   {
     id: null,
@@ -224,8 +285,9 @@ export const SECRET_RULES: Rule[] = [
     re: /(["']?)([A-Za-z0-9_.\-가-힣]+)\1(\s*[:=]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;&)}\]<>"']+)/g,
     apply: (ctx, _m, g) => {
       const [q, key, sep, v] = g
-      if (!ctx.isKey(key) || v.startsWith('[') || /^(bearer|basic)$/i.test(v)) return null
-      const masked = maskValue(ctx, key, v)
+      const kind = ctx.keyKind(key)
+      if (!kind || v.startsWith('[') || /^(bearer|basic)$/i.test(v)) return null
+      const masked = maskValue(ctx, key, v, kind)
       return masked === null ? null : q + key + q + sep + masked
     },
   },
