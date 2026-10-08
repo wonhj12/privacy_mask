@@ -106,7 +106,16 @@ tel=010-1234-5678 db.password=abc123
 - 따옴표 없는 `Cookie:` 헤더는 줄 끝까지 가립니다.
 - 직접 입력한 프롬프트만 마스킹합니다. Claude가 도구로 읽은 파일·명령 출력은 아직 대상이 아닙니다.
 
-## 사용
+## 설치
+
+```bash
+claude plugin marketplace add wonhj12/privacy_mask@main
+claude plugin install privacy-mask@wonhajin
+```
+
+새 버전은 `claude plugin update privacy-mask@wonhajin`으로 받습니다.
+
+설치 없이 한 세션만 쓰려면:
 
 ```bash
 claude --plugin-dir /path/to/privacy_mask
