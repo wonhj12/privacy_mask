@@ -14,6 +14,7 @@ export const RULE_IDS = [
   'jasypt',
   'auth_header',
   'connection_string',
+  'cookie',
   'secret_key',
 ] as const
 
@@ -63,9 +64,13 @@ export const keepEnds = (s: string, n: number) => {
 const SERVICE_LABELS: [RegExp, string][] = [
   [/^(AKIA|ASIA)/, 'AWS키'],
   [/^(gh[pousr]_|github_pat_)/, 'GitHub토큰'],
+  [/^glpat-/, 'GitLab토큰'],
   [/^sk-ant-/, 'Anthropic키'],
   [/^sk-/, 'OpenAI키'],
   [/^xox/, 'Slack토큰'],
+  [/^AIza/, 'Google키'],
+  [/^[sr]k_(live|test)_/, 'Stripe키'],
+  [/^npm_/, 'npm토큰'],
 ]
 
 export const serviceLabel = (token: string) => SERVICE_LABELS.find(([re]) => re.test(token))?.[1] ?? '토큰'
@@ -139,7 +144,12 @@ export const SECRET_RULES: Rule[] = [
   },
   {
     id: 'service_token',
-    re: /\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-ant-[\w-]{20,}|sk-[A-Za-z0-9]{20,}|xox[abprs]-[\w-]{10,})\b/g,
+    re: /https:\/\/(?:hooks\.slack\.com\/services\/[\w/-]+|(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+)/g,
+    apply: (ctx, m) => ctx.tag('웹훅URL', m),
+  },
+  {
+    id: 'service_token',
+    re: /\b(?:(?:AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{22,}|glpat-[\w-]{20,}|sk-ant-[\w-]{20,}|sk-proj-[\w-]{20,}|sk-[A-Za-z0-9]{20,}|xox[abprs]-[\w-]{10,}|AIza[\w-]{35}|[sr]k_(?:live|test)_[0-9A-Za-z]{24,}|npm_[A-Za-z0-9]{36})\b/g,
     apply: (ctx, m) => ctx.tag(serviceLabel(m), m),
   },
   {
@@ -169,6 +179,25 @@ export const SECRET_RULES: Rule[] = [
     // scheme://user:password@host
     re: /(:\/\/[^/\s:@]+:)([^@\s/]+)(@)/g,
     apply: (ctx, _m, g) => g[0] + ctx.tag('접속비밀번호', g[1]) + g[2],
+  },
+  {
+    // Azure 접속 문자열
+    id: 'connection_string',
+    re: /(\b(?:AccountKey|SharedAccessKey)=)([A-Za-z0-9+/]+=*)/g,
+    apply: (ctx, _m, g) => g[0] + ctx.tag('접속비밀번호', g[1]),
+  },
+  {
+    // Cookie·Set-Cookie 헤더: 값 안의 이름=값 쌍을 하나하나 보지 않고 통째로 가린다
+    id: 'cookie',
+    re: /(["']?\b(?:set-)?cookie["']?\s*:\s*)("[^"\n]*"|'[^'\n]*'|[^\r\n]+)/gi,
+    apply: (ctx, _m, g) => {
+      const [head, v] = g
+      const q = v[0]
+      if ((q === '"' || q === "'") && v.length >= 2 && v.endsWith(q)) {
+        return v.length > 2 ? `${head}${q}${ctx.tag('쿠키', v.slice(1, -1))}${q}` : null
+      }
+      return head + ctx.tag('쿠키', v)
+    },
   },
   // ---- 비밀값: 키 이름으로 잡는 것 ----
   {

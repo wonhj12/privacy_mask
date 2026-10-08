@@ -166,3 +166,41 @@ test('설정: 운전면허를 끄면 계좌 규칙이 잡는다', { options: { e
   const [seen] = await submitAll($, on, ['lic=11-23-456789-01'])
   expect(seen).toBe('lic=[계좌번호#1] 11-**-******-01')
 })
+
+test('비밀값: 추가 서비스 토큰', async ($, on) => {
+  const t = {
+    google: 'AIza' + 'x'.repeat(35),
+    ghPat: 'github_pat_' + 'a'.repeat(22),
+    gitlab: 'glpat-' + 'b'.repeat(20),
+    stripe: 'sk_live_' + 'c'.repeat(24),
+    stripeR: 'rk_test_' + 'd'.repeat(24),
+    npm: 'npm_' + 'e'.repeat(36),
+    awsTmp: 'ASIA' + 'F'.repeat(16),
+    openaiProj: 'sk-proj-' + 'g'.repeat(20),
+  }
+  const [seen] = await submitAll($, on, [Object.values(t).join(' ')])
+  expect(seen).toBe(
+    '[Google키#1] [GitHub토큰#1] [GitLab토큰#1] [Stripe키#1] [Stripe키#2] [npm토큰#1] [AWS키#1] [OpenAI키#1]',
+  )
+})
+
+test('비밀값: 하이픈이 이어지는 sk- 단어는 토큰으로 보지 않는다', async ($, on) => {
+  const text = 'pip install sk-learn-model-training-pipeline'
+  const [seen] = await submitAll($, on, [text])
+  expect(seen).toBe(text)
+})
+
+test('비밀값: 웹훅 URL · Azure AccountKey', async ($, on) => {
+  const key = 'k'.repeat(20) + '=='
+  const [seen] = await submitAll($, on, [
+    `slack https://hooks.slack.com/services/T000/B000/XXXX discord https://discord.com/api/webhooks/123/abc-def az AccountName=demo;AccountKey=${key};EndpointSuffix=core.windows.net`,
+  ])
+  expect(seen).toBe(
+    'slack [웹훅URL#1] discord [웹훅URL#2] az AccountName=demo;AccountKey=[접속비밀번호#1];EndpointSuffix=core.windows.net',
+  )
+})
+
+test('비밀값: Cookie 헤더는 값 전체, CRLF 다음 줄은 그대로', async ($, on) => {
+  const [seen] = await submitAll($, on, ['Cookie: SESSION=abc123; theme=dark\r\nHost: x\n"set-cookie": "a=1"'])
+  expect(seen).toBe('Cookie: [쿠키#1]\r\nHost: x\n"set-cookie": "[쿠키#2]"')
+})
