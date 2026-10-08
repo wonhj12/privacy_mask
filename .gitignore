@@ -1,0 +1,12 @@
+# Claude Code / superpowers
+.superpowers/
+.claude/settings.local.json
+.claude/.cc-writes/
+# /plugin-types 가 생성하는 타입 파일 (빌드마다 재생성)
+.claude/types/
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
