@@ -2,8 +2,10 @@
 export const RULE_IDS = [
   'rrn',
   'phone',
+  'driver_license',
   'email',
   'card',
+  'biz_no',
   'account',
   'ip',
   'private_key',
@@ -88,6 +90,20 @@ const isCardBin = (digits: string) => {
   const head = Number(digits.slice(0, 4))
   return head >= 2221 && head <= 2720
 }
+
+// 사업자등록번호 검증: 앞 9자리 × 1,3,7,1,3,7,1,3,5 + ⌊9번째 × 5 / 10⌋, (10 − 합 mod 10) mod 10 = 끝자리
+const BIZ_WEIGHTS = [1, 3, 7, 1, 3, 7, 1, 3, 5]
+
+export const isBizNo = (d: string) => {
+  if (d.length !== 10) return false
+  let sum = 0
+  for (let i = 0; i < 9; i++) sum += Number(d[i]) * (BIZ_WEIGHTS[i] ?? 0)
+  sum += Math.floor((Number(d[8]) * 5) / 10)
+  return (10 - (sum % 10)) % 10 === Number(d[9])
+}
+
+// 2014년 이전 면허증의 지역명 표기
+const LICENSE_REGIONS = '서울|부산|경기|강원|충북|충남|전북|전남|경북|경남|제주|대구|인천|광주|대전|울산'
 
 // username류는 계정 식별용이라 제외 (사용자 ID로 로그 추적이 필요함)
 const SECRET_KEY =
@@ -224,6 +240,24 @@ export const PII_RULES: Rule[] = [
     // 지역번호는 구분자가 있을 때만 (숫자열 오탐 방지)
     re: /(?<!\d)(0(?:2|[3-6][1-5]|70))[-)]\d{3,4}-\d{4}(?!\d)/g,
     apply: (ctx, m, g) => `${ctx.tag('전화번호', digitsOf(m))} ${g[0]}-****-${digitsOf(m).slice(-4)}`,
+  },
+  {
+    // 지역 코드(11~26, 28)-연도-일련번호-검증 / 2014년 이전: 지역명 연도-일련번호-검증
+    id: 'driver_license',
+    re: new RegExp(
+      `(?<![\\w-])(?:(?:${LICENSE_REGIONS})\\s?\\d{2}-\\d{6}-\\d{2}|(?:1[1-9]|2[0-6]|28)-\\d{2}-\\d{6}-\\d{2})(?![\\w-])`,
+      'g',
+    ),
+    apply: (ctx, m) => ctx.tag('운전면허', digitsOf(m)),
+  },
+  {
+    // 체크섬이 틀리면 null → 계좌 규칙이 다시 본다
+    id: 'biz_no',
+    re: /(?<![\w-])\d{3}-\d{2}-\d{5}(?![\w-])/g,
+    apply: (ctx, m) => {
+      const d = digitsOf(m)
+      return isBizNo(d) ? `${ctx.tag('사업자번호', d)} ${keepEnds(m, ctx.keep)}` : null
+    },
   },
   {
     id: 'account',

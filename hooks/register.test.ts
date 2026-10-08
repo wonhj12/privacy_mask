@@ -152,3 +152,17 @@ test('비밀값: 서비스 토큰은 종류별 라벨', async ($, on) => {
   const [seen] = await submitAll($, on, [`k1=${aws} k2=${gh} k3=${aws}`])
   expect(seen).toBe('k1=[AWS키#1] k2=[GitHub토큰#1] k3=[AWS키#1]')
 })
+
+test('운전면허·사업자번호는 계좌보다 먼저 구분하고, 체크섬이 틀리면 계좌로 본다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'lic=11-23-456789-01 old=서울 89-123456-78 biz=123-45-67891 bad=123-45-67890 other=99-23-456789-01',
+  ])
+  expect(seen).toBe(
+    'lic=[운전면허#1] old=[운전면허#2] biz=[사업자번호#1] 12*-**-***91 bad=[계좌번호#1] 12*-**-***90 other=[계좌번호#2] 99-**-******-01',
+  )
+})
+
+test('설정: 운전면허를 끄면 계좌 규칙이 잡는다', { options: { enable_driver_license: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['lic=11-23-456789-01'])
+  expect(seen).toBe('lic=[계좌번호#1] 11-**-******-01')
+})
