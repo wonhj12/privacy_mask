@@ -87,7 +87,6 @@
 | id | 잡는 키 | 거르는 것 |
 |---|---|---|
 | `name_key` | `cust`·`customer`·`member`·`mbr`·`buyer`·`receiver`·`recipient`·`holder`·`owner`·`emp`·`employee`·`real`·`full` + `name`/`nm`, `성명`·`이름`·`고객명` | `fileName`·`hostName`·`tableName` 등 위 접두어가 없는 `name` |
-| `address_key` | `addr`·`address` (앞에 `home`·`road`·`jibun`·`detail` 등 허용), `주소` | 앞에 `ip`·`mac`·`remote`·`local`·`server`·`host`·`email`·`mail`·`bind`·`proxy`가 붙은 것 |
 | `birth_key` | `birth`·`birthday`·`birthDate`·`dob`·`생년월일` | |
 | `card_extra_key` | `cvc`·`cvv`·`cardExp`·`cardExpiry` | `expires_in` 같은 토큰 만료 |
 
@@ -114,7 +113,7 @@
 
 | 키 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `enable_<id>` | boolean | `true` | 위 표의 규칙 id마다 하나 (20개) |
+| `enable_<id>` | boolean | `true` | 위 표의 규칙 id마다 하나 (19개) |
 | `propagate_min_text` | number | `2` | 개인정보 키·사용자 키의 문자 값 전체 치환 최소 길이 |
 | `propagate_min` | number | `6` | 숫자로만 된 값(`-` `.` 제외)과 비밀값 키 값의 전체 치환 최소 길이 |
 | `partial_keep` | number | `2` | 일부 노출 "앞뒤 N자" 규칙의 N |
@@ -174,7 +173,7 @@ hooks/
 - `register.ts`에서 같은 폴더의 다른 `.ts`를 `import`할 수 있는가. 안 되면 한 파일 안에서 구역을 나눈다.
 - 테스트 도구(`claude-code/testing`)에서 `userConfig` 값을 넣을 수 있는가. 안 되면 `mask.ts`를 직접 테스트한다.
 - 사업자번호 체크섬 계산식 (python-stdnum `kr/brn.py`와 대조), 운전면허 2014년 이전 지역명 표기, 웹훅·Azure·쿠키 형식.
-- `userConfig` boolean 20개가 설정 화면에서 어떻게 보이는가. 너무 길면 "끌 id 목록" 하나로 바꾼다.
+- `userConfig` boolean 19개가 설정 화면에서 어떻게 보이는가. 너무 길면 "끌 id 목록" 하나로 바꾼다.
 
 ## 버린 대안
 
@@ -186,4 +185,5 @@ hooks/
 - **사용자 키를 비밀값용·개인정보용 두 목록으로:** 차이가 전체 치환 기준 하나뿐인데 매번 고르게 만든다.
 - **설정 오류 시 기본값으로 마스킹 후 전송:** 사용자 정의 항목이 빠진 채 나간다.
 - **사용자 정의를 키 이름만으로:** 키 없이 값만 나오는 사번·여권번호 같은 형식을 못 잡는다. 반대로 정규식만으로 하면 단순한 키 추가에도 정규식을 써야 한다.
+- **주소 키:** `address=서울시 중구 …`처럼 따옴표 없는 값은 공백에서 끊겨 첫 단어만 가려지고, 줄 끝까지 가리면 같은 줄의 다른 로그를 덮는다. `ipAddr`·`remoteAddr` 같은 기술 주소와 구분하는 것도 어렵다. 난이도 대비 효과가 낮아 기본 규칙에서 뺐다. 필요하면 사용자 키로 넣는다.
 - **여권번호·차량번호·MAC 등을 기본 규칙에:** 오탐이 많거나 드물다. 사용자 정규식으로 넣는다 (README에 예시).
