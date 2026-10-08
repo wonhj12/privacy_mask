@@ -282,3 +282,14 @@ test('키 값이 null·true 같은 리터럴이면 가리지 않는다', async (
   const [seen] = await submitAll($, on, ['{"custName": null, "memo": null, "password": true}'])
   expect(seen).toBe('{"custName": null, "memo": null, "password": true}')
 })
+
+test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$: any, e: any) => {
+    toasts.push(e.text ?? e.message ?? JSON.stringify(e))
+    return { value: undefined }
+  })
+  await submitAll($, on, ['custName=홍길동 then 홍길동 again'])
+  expect(toasts.join()).toContain('개인정보 2')
+  expect(toasts.join()).not.toContain('비밀값')
+})

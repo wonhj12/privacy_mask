@@ -52,8 +52,8 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
   const counts: Record<string, number> = {}
   const ids = new Map<string, number>()
   const last: Record<string, number> = {}
-  // 키로 찾은 비밀값 → 자리표시자 (같은 값이 여러 키에 걸리면 처음 키 이름으로 통일)
-  const keyedValues = new Map<string, string>()
+  // 키로 찾은 값 → 자리표시자와 집계 라벨 (같은 값이 여러 키에 걸리면 처음 키 이름으로 통일)
+  const keyedValues = new Map<string, { ph: string; label: string }>()
 
   const placeholder = (label: string, norm: string) => {
     const key = `${label}\u0000${norm}`
@@ -80,14 +80,15 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
       if (!value.trim()) return value
       // JSON·설정의 빈 값 표기는 개인정보·비밀값이 아니다. 가리면 같은 리터럴이 프롬프트 곳곳에서 바뀐다
       if (/^(null|undefined|true|false|none|nil)$/i.test(value)) return value
-      ctx.count(kind === 'secret' ? SECRET : '개인정보')
+      const label = kind === 'secret' ? SECRET : '개인정보'
+      ctx.count(label)
       const known = keyedValues.get(value)
-      if (known !== undefined) return known
+      if (known !== undefined) return known.ph
       const ph = placeholder(key, value)
       // 숫자로만 된 값과 비밀값은 짧으면 다른 뜻으로 흔히 쓰여(cvc=123, flag_pw=Y) 기준을 높게 둔다
       const min = kind === 'secret' || /^[\d.-]+$/.test(value) ? config.propagateMin : config.propagateMinText
       // 공백이 낀 값은 전체 치환하지 않는다 (줄바꿈·들여쓰기가 프롬프트 곳곳에서 바뀌는 것 방지)
-      if (value.length >= min && !/\s/.test(value)) keyedValues.set(value, ph)
+      if (value.length >= min && !/\s/.test(value)) keyedValues.set(value, { ph, label })
       return ph
     },
     keyKind: (key): KeyKind | null => {
@@ -115,14 +116,14 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
   // 앞뒤가 영숫자로 이어지면 다른 숫자·단어의 일부(ts=1760123456000)로, [..#n] 안이면 이미 넣은
   // 자리표시자로 보고 건드리지 않는다. 키 자리(password=), 태그 이름(<password>),
   // 키 이름 속성(key="password" · name="password")도 값이 아니다
-  for (const [value, ph] of [...keyedValues].sort((a, b) => b[0].length - a[0].length)) {
+  for (const [value, { ph, label }] of [...keyedValues].sort((a, b) => b[0].length - a[0].length)) {
     const re = new RegExp(
       `(?<![\\w\\[#<])(?<!<\\/)(?<!(?:key|name)\\s*=\\s*["'])${escapeRegExp(value)}(?![\\w#\\]])(?!["']?\\s*[:=])`,
       'g',
     )
     each(s =>
       s.replace(re, () => {
-        ctx.count(SECRET)
+        ctx.count(label)
         return ph
       }),
     )
