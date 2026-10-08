@@ -78,6 +78,8 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
     keyed: (key, value, kind) => {
       // <entry key="password"> 뒤의 줄바꿈·들여쓰기 같은 공백뿐인 값은 비밀값이 아니다
       if (!value.trim()) return value
+      // JSON·설정의 빈 값 표기는 개인정보·비밀값이 아니다. 가리면 같은 리터럴이 프롬프트 곳곳에서 바뀐다
+      if (/^(null|undefined|true|false|none|nil)$/i.test(value)) return value
       ctx.count(kind === 'secret' ? SECRET : '개인정보')
       const known = keyedValues.get(value)
       if (known !== undefined) return known

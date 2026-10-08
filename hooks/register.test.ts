@@ -277,3 +277,8 @@ test('제외 구간: 값 한가운데의 ###는 구분자가 아니다', async (
   const [seen] = await submitAll($, on, ['db.password=Ab###Cd9xYz###Q1'])
   expect(seen).toBe('db.password=[db.password#1]')
 })
+
+test('키 값이 null·true 같은 리터럴이면 가리지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['{"custName": null, "memo": null, "password": true}'])
+  expect(seen).toBe('{"custName": null, "memo": null, "password": true}')
+})
