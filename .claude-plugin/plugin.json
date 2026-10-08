@@ -16,6 +16,7 @@
     "enable_auth_header": { "type": "boolean", "title": "Authorization·Bearer", "description": "인증 헤더의 토큰 값", "default": true },
     "enable_connection_string": { "type": "boolean", "title": "접속 문자열 비밀번호", "description": "scheme://user:비밀번호@host, jdbc:oracle 비밀번호", "default": true },
     "enable_secret_key": { "type": "boolean", "title": "비밀값 키", "description": "password·token·secret 등 키 이름에 붙은 값을 [키이름#n]으로", "default": true },
-    "propagate_min": { "type": "number", "title": "전체 치환 최소 길이 (숫자·비밀값)", "description": "키로 찾은 값이 이 길이 이상이면 프롬프트의 다른 곳에서도 가린다", "default": 6, "min": 1 }
+    "propagate_min": { "type": "number", "title": "전체 치환 최소 길이 (숫자·비밀값)", "description": "키로 찾은 값이 이 길이 이상이면 프롬프트의 다른 곳에서도 가린다", "default": 6, "min": 1 },
+    "partial_keep": { "type": "number", "title": "일부 노출 글자 수", "description": "계좌·사업자번호·이메일 아이디 등에서 앞뒤로 보여 줄 글자 수", "default": 2, "min": 0 }
   }
 }

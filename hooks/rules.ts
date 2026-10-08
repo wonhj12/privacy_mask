@@ -18,8 +18,10 @@ export const RULE_IDS = [
 export type RuleId = (typeof RULE_IDS)[number]
 
 export type Ctx = {
-  // 같은 프롬프트 안에서 같은 값 → 같은 번호
-  tag: (label: string, value: string) => string
+  // 같은 프롬프트 안에서 같은 norm → 같은 번호. norm은 호출부가 정한다 (전화는 숫자만, 이메일은 소문자 등)
+  tag: (label: string, norm: string) => string
+  // 일부 노출 "앞뒤 N자"의 N
+  keep: number
   // 키 이름으로 찾은 비밀값: 키 이름을 라벨로 쓰고, 같은 값은 프롬프트 전체에서 가린다
   keyed: (key: string, value: string) => string
   // 가릴 키인가 (켜진 키 규칙 기준)
@@ -38,6 +40,33 @@ export type Rule = {
 export const SECRET = '비밀값'
 
 export const digitsOf = (s: string) => s.replace(/\D/g, '')
+
+const SEP = /[-. ]/
+
+// 구분자는 남기고, 구분자를 뺀 글자 중 앞 n자·뒤 n자만 보인다. 2n자 이하면 전부 가린다
+export const keepEnds = (s: string, n: number) => {
+  const chars = [...s]
+  const total = chars.filter(c => !SEP.test(c)).length
+  let i = 0
+  return chars
+    .map(c => {
+      if (SEP.test(c)) return c
+      const idx = i++
+      return total > n * 2 && (idx < n || idx >= total - n) ? c : '*'
+    })
+    .join('')
+}
+
+// 접두어로 서비스를 구분한다. sk-ant- 가 sk- 보다 먼저 와야 한다
+const SERVICE_LABELS: [RegExp, string][] = [
+  [/^(AKIA|ASIA)/, 'AWS키'],
+  [/^(gh[pousr]_|github_pat_)/, 'GitHub토큰'],
+  [/^sk-ant-/, 'Anthropic키'],
+  [/^sk-/, 'OpenAI키'],
+  [/^xox/, 'Slack토큰'],
+]
+
+export const serviceLabel = (token: string) => SERVICE_LABELS.find(([re]) => re.test(token))?.[1] ?? '토큰'
 
 const luhn = (digits: string) => {
   let sum = 0
@@ -85,45 +114,45 @@ export const SECRET_RULES: Rule[] = [
   {
     id: 'private_key',
     re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-    apply: (ctx, m) => ctx.tag(SECRET, m),
+    apply: (ctx, m) => ctx.tag('개인키', m),
   },
   {
     id: 'jwt',
     re: /\beyJ[\w-]{5,}\.eyJ[\w-]{5,}\.[\w-]+/g,
-    apply: (ctx, m) => ctx.tag(SECRET, m),
+    apply: (ctx, m) => ctx.tag('JWT', m),
   },
   {
     id: 'service_token',
     re: /\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-ant-[\w-]{20,}|sk-[A-Za-z0-9]{20,}|xox[abprs]-[\w-]{10,})\b/g,
-    apply: (ctx, m) => ctx.tag(SECRET, m),
+    apply: (ctx, m) => ctx.tag(serviceLabel(m), m),
   },
   {
     id: 'jasypt',
     // Jasypt 암호문
     re: /ENC\([^)\s]+\)/g,
-    apply: (ctx, m) => ctx.tag(SECRET, m),
+    apply: (ctx, m) => ctx.tag('암호문', m),
   },
   {
     id: 'auth_header',
     re: /(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)([\w\-.~+/]+=*)/gi,
-    apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]),
+    apply: (ctx, _m, g) => g[0] + ctx.tag('인증토큰', g[1]),
   },
   {
     id: 'auth_header',
     re: /(\bbearer\s+)([\w\-.~+/]{20,}=*)/gi,
-    apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]),
+    apply: (ctx, _m, g) => g[0] + ctx.tag('인증토큰', g[1]),
   },
   {
     id: 'connection_string',
     // jdbc:oracle:thin:user/password@host
     re: /(jdbc:oracle:\w+:[^/\s@:]+\/)([^@\s]+)(@)/gi,
-    apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]) + g[2],
+    apply: (ctx, _m, g) => g[0] + ctx.tag('접속비밀번호', g[1]) + g[2],
   },
   {
     id: 'connection_string',
     // scheme://user:password@host
     re: /(:\/\/[^/\s:@]+:)([^@\s/]+)(@)/g,
-    apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]) + g[2],
+    apply: (ctx, _m, g) => g[0] + ctx.tag('접속비밀번호', g[1]) + g[2],
   },
   // ---- 비밀값: 키 이름으로 잡는 것 ----
   {
@@ -161,15 +190,15 @@ export const PII_RULES: Rule[] = [
   // ---- 개인정보 ----
   {
     id: 'email',
-    re: /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g,
-    apply: (ctx, m, g) => `${ctx.tag('이메일', m)} ***@${g[0]}`,
+    re: /([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g,
+    apply: (ctx, m, g) => `${ctx.tag('이메일', m.toLowerCase())} ${keepEnds(g[0], ctx.keep)}@${g[1]}`,
   },
   {
     id: 'card',
     re: /(?<!\d)(?:\d{4}[- ]?){3}\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
-      return isCardBin(d) && luhn(d) ? `${ctx.tag('카드번호', m)} ****-${d.slice(-4)}` : null
+      return isCardBin(d) && luhn(d) ? `${ctx.tag('카드번호', d)} ****-${d.slice(-4)}` : null
     },
   },
   {
@@ -179,7 +208,7 @@ export const PII_RULES: Rule[] = [
     apply: (ctx, m, g) => {
       const month = Number(g[0])
       const day = Number(g[1])
-      return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? ctx.tag('주민번호', m) : null
+      return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? ctx.tag('주민번호', digitsOf(m)) : null
     },
   },
   {
@@ -187,14 +216,14 @@ export const PII_RULES: Rule[] = [
     re: /(?<!\d)01[016789][- .]?\d{3,4}[- .]?\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
-      return `${ctx.tag('전화번호', m)} ${d.slice(0, 3)}-****-${d.slice(-4)}`
+      return `${ctx.tag('전화번호', d)} ${d.slice(0, 3)}-****-${d.slice(-4)}`
     },
   },
   {
     id: 'phone',
     // 지역번호는 구분자가 있을 때만 (숫자열 오탐 방지)
     re: /(?<!\d)(0(?:2|[3-6][1-5]|70))[-)]\d{3,4}-\d{4}(?!\d)/g,
-    apply: (ctx, m, g) => `${ctx.tag('전화번호', m)} ${g[0]}-****-${digitsOf(m).slice(-4)}`,
+    apply: (ctx, m, g) => `${ctx.tag('전화번호', digitsOf(m))} ${g[0]}-****-${digitsOf(m).slice(-4)}`,
   },
   {
     id: 'account',
@@ -203,7 +232,7 @@ export const PII_RULES: Rule[] = [
     re: /(?<![\w-])\d{2,6}(?:-\d{2,7}){2,3}(?![\w-])/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
-      return d.length >= 10 && d.length <= 14 ? `${ctx.tag('계좌번호', m)} ****${d.slice(-4)}` : null
+      return d.length >= 10 && d.length <= 14 ? `${ctx.tag('계좌번호', d)} ${keepEnds(m, ctx.keep)}` : null
     },
   },
   // ---- IP: 첫·끝 옥텟만 남겨 서버 구분은 가능하게 ----
@@ -212,8 +241,7 @@ export const PII_RULES: Rule[] = [
     re: /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\d|\.\d)/g,
     apply: (ctx, m, g) => {
       if (g.some(o => Number(o) > 255) || m === '127.0.0.1' || m === '0.0.0.0') return null
-      ctx.count('IP')
-      return `${g[0]}.***.***.${g[3]}`
+      return `${ctx.tag('IP', m)} ${g[0]}.***.***.${g[3]}`
     },
   },
 ]

@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, type MaskConfig } from './config.ts'
-import { type Ctx, digitsOf, isSecretKey, PII_RULES, type Rule, SECRET, SECRET_RULES } from './rules.ts'
+import { type Ctx, isSecretKey, PII_RULES, type Rule, SECRET, SECRET_RULES } from './rules.ts'
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -32,12 +32,11 @@ export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
     count: label => {
       counts[label] = (counts[label] ?? 0) + 1
     },
-    tag: (label, value) => {
+    tag: (label, norm) => {
       ctx.count(label)
-      // 개인정보는 구분자 차이(010-1234-5678 / 01012345678)를 같은 값으로 본다. 비밀값은 그대로 비교
-      const norm = label === SECRET ? value : label === '이메일' ? value.toLowerCase() : digitsOf(value)
       return placeholder(label, norm)
     },
+    keep: config.partialKeep,
     keyed: (key, value) => {
       // <entry key="password"> 뒤의 줄바꿈·들여쓰기 같은 공백뿐인 값은 비밀값이 아니다
       if (!value.trim()) return value

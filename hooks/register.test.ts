@@ -16,7 +16,7 @@ test('개인정보: 주민번호는 전부, 나머지는 뒷자리만 남긴다'
     'rrn=900101-1234567 tel=010-1234-5678 mail=hong@test.co.kr card=4111-1111-1111-1111 acct=110-123-456789',
   ])
   expect(seen).toBe(
-    'rrn=[주민번호#1] tel=[전화번호#1] 010-****-5678 mail=[이메일#1] ***@test.co.kr card=[카드번호#1] ****-1111 acct=[계좌번호#1] ****6789',
+    'rrn=[주민번호#1] tel=[전화번호#1] 010-****-5678 mail=[이메일#1] ****@test.co.kr card=[카드번호#1] ****-1111 acct=[계좌번호#1] 11*-***-****89',
   )
 })
 
@@ -93,13 +93,13 @@ test('비밀값: Authorization 헤더 · JDBC 접속 문자열 · Jasypt ENC · 
     'Authorization: Bearer abcdefghijklmnop.qrs jdbc:oracle:thin:scott/tiger@10.20.30.40:1521:ORCL pw=ENC(xyz123) jwt eyJhbGciOi.eyJzdWIiOi.sig',
   ])
   expect(seen).toBe(
-    'Authorization: Bearer [비밀값#3] jdbc:oracle:thin:scott/[비밀값#4]@10.***.***.40:1521:ORCL pw=[비밀값#2] jwt [비밀값#1]',
+    'Authorization: Bearer [인증토큰#1] jdbc:oracle:thin:scott/[접속비밀번호#1]@[IP#1] 10.***.***.40:1521:ORCL pw=[암호문#1] jwt [JWT#1]',
   )
 })
 
 test('IP는 첫·끝 옥텟만 남기고 localhost는 그대로', async ($, on) => {
   const [seen] = await submitAll($, on, ['from 192.168.0.1 to 127.0.0.1 at 2026-10-08'])
-  expect(seen).toBe('from 192.***.***.1 to 127.0.0.1 at 2026-10-08')
+  expect(seen).toBe('from [IP#1] 192.***.***.1 to 127.0.0.1 at 2026-10-08')
 })
 
 test('로그의 날짜·시각·epoch ms·일반 숫자·코드는 그대로 둔다', async ($, on) => {
@@ -113,7 +113,7 @@ test('하이픈으로 이어지는 파일명·문서번호는 계좌로 보지 �
     'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=110-123-456789.'
   const [seen] = await submitAll($, on, [text])
   expect(seen).toBe(
-    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] ****6789.',
+    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] 11*-***-****89.',
   )
 })
 
@@ -132,4 +132,23 @@ test('설정: 끈 항목은 가리지 않는다', { options: { enable_phone: fal
 test('설정: 전체 치환 최소 길이를 바꿀 수 있다', { options: { propagate_min: 3 } }, async ($, on) => {
   const [seen] = await submitAll($, on, ['pw=abc url=/x?t=abc'])
   expect(seen).toBe('pw=[pw#1] url=/x?t=[pw#1]')
+})
+
+test('일부 노출: 이메일 아이디·계좌는 앞뒤 2자, 같은 IP는 같은 번호', async ($, on) => {
+  const [seen] = await submitAll($, on, ['gildong.hong@test.co.kr 10.1.2.3 10.1.2.3 10.1.2.4'])
+  expect(seen).toBe(
+    '[이메일#1] gi*****.**ng@test.co.kr [IP#1] 10.***.***.3 [IP#1] 10.***.***.3 [IP#2] 10.***.***.4',
+  )
+})
+
+test('설정: 일부 노출 글자 수', { options: { partial_keep: 1 } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['acct=110-123-456789'])
+  expect(seen).toBe('acct=[계좌번호#1] 1**-***-*****9')
+})
+
+test('비밀값: 서비스 토큰은 종류별 라벨', async ($, on) => {
+  const aws = 'AKIA' + 'A'.repeat(16)
+  const gh = 'ghp_' + 'a'.repeat(36)
+  const [seen] = await submitAll($, on, [`k1=${aws} k2=${gh} k3=${aws}`])
+  expect(seen).toBe('k1=[AWS키#1] k2=[GitHub토큰#1] k3=[AWS키#1]')
 })
