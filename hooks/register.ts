@@ -1,9 +1,12 @@
 import type { Register } from 'claude-code'
+import { configFromOptions } from './config.ts'
 import { maskText } from './mask.ts'
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // 설정을 바꾸면 엔진이 모듈을 다시 불러 register가 새 options로 다시 돈다
+  const config = configFromOptions(options)
   on('prompt.submit', async ($, e, next) => {
-    const { text, counts } = maskText(e.text)
+    const { text, counts } = maskText(e.text, config)
     const labels = Object.keys(counts)
     if (labels.length === 0) return next(e)
 

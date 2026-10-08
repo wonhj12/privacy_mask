@@ -1,12 +1,35 @@
+// 설정 키는 enable_<id>. 규칙을 추가하면 여기와 plugin.json의 userConfig에 함께 넣는다
+export const RULE_IDS = [
+  'rrn',
+  'phone',
+  'email',
+  'card',
+  'account',
+  'ip',
+  'private_key',
+  'jwt',
+  'service_token',
+  'jasypt',
+  'auth_header',
+  'connection_string',
+  'secret_key',
+] as const
+
+export type RuleId = (typeof RULE_IDS)[number]
+
 export type Ctx = {
   // 같은 프롬프트 안에서 같은 값 → 같은 번호
   tag: (label: string, value: string) => string
   // 키 이름으로 찾은 비밀값: 키 이름을 라벨로 쓰고, 같은 값은 프롬프트 전체에서 가린다
   keyed: (key: string, value: string) => string
+  // 가릴 키인가 (켜진 키 규칙 기준)
+  isKey: (key: string) => boolean
   count: (label: string) => void
 }
 
 export type Rule = {
+  // null이면 항상 실행한다. 키 규칙은 켜고 끄기를 ctx.isKey가 판단한다
+  id: RuleId | null
   re: RegExp
   // null이면 오탐으로 보고 원문 유지
   apply: (ctx: Ctx, m: string, g: string[]) => string | null
@@ -56,69 +79,78 @@ const maskValue = (ctx: Ctx, key: string, v: string) => {
   return ctx.keyed(key, v)
 }
 
-// 이보다 짧은 비밀값은 전체 치환하지 않는다 (Y·1 같은 값이 로그 곳곳을 가리는 것 방지)
-export const PROPAGATE_MIN = 6
-
 // 순서가 중요하다: 비밀값 → (키로 찾은 값 전체 치환) → 개인정보 → IP. 앞 단계가 남긴 [..] 자리표시자는 뒤 규칙이 건드리지 않는다
 export const SECRET_RULES: Rule[] = [
   // ---- 비밀값: 형식만으로 잡히는 것 ----
   {
+    id: 'private_key',
     re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
     apply: (ctx, m) => ctx.tag(SECRET, m),
   },
   {
+    id: 'jwt',
     re: /\beyJ[\w-]{5,}\.eyJ[\w-]{5,}\.[\w-]+/g,
     apply: (ctx, m) => ctx.tag(SECRET, m),
   },
   {
+    id: 'service_token',
     re: /\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-ant-[\w-]{20,}|sk-[A-Za-z0-9]{20,}|xox[abprs]-[\w-]{10,})\b/g,
     apply: (ctx, m) => ctx.tag(SECRET, m),
   },
   {
+    id: 'jasypt',
     // Jasypt 암호문
     re: /ENC\([^)\s]+\)/g,
     apply: (ctx, m) => ctx.tag(SECRET, m),
   },
   {
+    id: 'auth_header',
     re: /(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)([\w\-.~+/]+=*)/gi,
     apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]),
   },
   {
+    id: 'auth_header',
     re: /(\bbearer\s+)([\w\-.~+/]{20,}=*)/gi,
     apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]),
   },
   {
+    id: 'connection_string',
     // jdbc:oracle:thin:user/password@host
     re: /(jdbc:oracle:\w+:[^/\s@:]+\/)([^@\s]+)(@)/gi,
     apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]) + g[2],
   },
   {
+    id: 'connection_string',
     // scheme://user:password@host
     re: /(:\/\/[^/\s:@]+:)([^@\s/]+)(@)/g,
     apply: (ctx, _m, g) => g[0] + ctx.tag(SECRET, g[1]) + g[2],
   },
   // ---- 비밀값: 키 이름으로 잡는 것 ----
   {
+    id: null,
     // <property name="password" value="..."/>
     re: /((?:name|key)\s*=\s*"([^"]+)"\s+value\s*=\s*")([^"]*)(")/g,
-    apply: (ctx, _m, g) => (isSecretKey(g[1]) && g[2] ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => (ctx.isKey(g[1]) && g[2] ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
   },
   {
+    id: null,
     // <entry key="password">...</entry>
     re: /(key\s*=\s*"([^"]+)"[^>]*>)([^<]+)(<)/g,
-    apply: (ctx, _m, g) => (isSecretKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => (ctx.isKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
   },
   {
+    id: null,
     // <password>...</password>
     re: /(<([A-Za-z0-9_.-]+)(?:\s[^>]*)?>)([^<]+)(<\/\2>)/g,
-    apply: (ctx, _m, g) => (isSecretKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
+    apply: (ctx, _m, g) => (ctx.isKey(g[1]) ? g[0] + ctx.keyed(g[1], g[2]) + g[3] : null),
   },
   {
+    id: null,
     // key=value · key: value · "key": "value"
     re: /(["']?)([A-Za-z0-9_.\-가-힣]+)\1(\s*[:=]\s*)("[^"\n]*"|'[^'\n]*'|[^\s,;&)}\]<>"']+)/g,
     apply: (ctx, _m, g) => {
       const [q, key, sep, v] = g
-      if (!isSecretKey(key) || v.startsWith('[') || /^(bearer|basic)$/i.test(v)) return null
+      if (!ctx.isKey(key) || v.startsWith('[') || /^(bearer|basic)$/i.test(v)) return null
       const masked = maskValue(ctx, key, v)
       return masked === null ? null : q + key + q + sep + masked
     },
@@ -128,10 +160,12 @@ export const SECRET_RULES: Rule[] = [
 export const PII_RULES: Rule[] = [
   // ---- 개인정보 ----
   {
+    id: 'email',
     re: /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g,
     apply: (ctx, m, g) => `${ctx.tag('이메일', m)} ***@${g[0]}`,
   },
   {
+    id: 'card',
     re: /(?<!\d)(?:\d{4}[- ]?){3}\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
@@ -139,6 +173,7 @@ export const PII_RULES: Rule[] = [
     },
   },
   {
+    id: 'rrn',
     // 13자리 epoch ms 오탐은 앞 6자리 월·일 검사로 거른다
     re: /(?<!\d)\d{2}(\d{2})(\d{2})[- ]?[1-8]\d{6}(?!\d)/g,
     apply: (ctx, m, g) => {
@@ -148,6 +183,7 @@ export const PII_RULES: Rule[] = [
     },
   },
   {
+    id: 'phone',
     re: /(?<!\d)01[016789][- .]?\d{3,4}[- .]?\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
@@ -155,11 +191,13 @@ export const PII_RULES: Rule[] = [
     },
   },
   {
+    id: 'phone',
     // 지역번호는 구분자가 있을 때만 (숫자열 오탐 방지)
     re: /(?<!\d)(0(?:2|[3-6][1-5]|70))[-)]\d{3,4}-\d{4}(?!\d)/g,
     apply: (ctx, m, g) => `${ctx.tag('전화번호', m)} ${g[0]}-****-${digitsOf(m).slice(-4)}`,
   },
   {
+    id: 'account',
     // 하이픈 구분 계좌번호, 숫자 합계 10~14자리 (날짜·시각은 자릿수로 제외)
     // 앞뒤가 영숫자·하이픈으로 이어지면 파일명·문서번호의 일부로 보고 제외
     re: /(?<![\w-])\d{2,6}(?:-\d{2,7}){2,3}(?![\w-])/g,
@@ -170,6 +208,7 @@ export const PII_RULES: Rule[] = [
   },
   // ---- IP: 첫·끝 옥텟만 남겨 서버 구분은 가능하게 ----
   {
+    id: 'ip',
     re: /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\d|\.\d)/g,
     apply: (ctx, m, g) => {
       if (g.some(o => Number(o) > 255) || m === '127.0.0.1' || m === '0.0.0.0') return null

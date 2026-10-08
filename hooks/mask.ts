@@ -1,4 +1,5 @@
-import { type Ctx, digitsOf, PII_RULES, PROPAGATE_MIN, type Rule, SECRET, SECRET_RULES } from './rules.ts'
+import { DEFAULT_CONFIG, type MaskConfig } from './config.ts'
+import { type Ctx, digitsOf, isSecretKey, PII_RULES, type Rule, SECRET, SECRET_RULES } from './rules.ts'
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -9,7 +10,7 @@ const groupsOf = (rest: unknown[]) => {
 }
 
 // 번호는 프롬프트마다 1부터. 호출이 끝나면 상태를 남기지 않는다.
-export const maskText = (text: string) => {
+export const maskText = (text: string, config: MaskConfig = DEFAULT_CONFIG) => {
   const counts: Record<string, number> = {}
   const ids = new Map<string, number>()
   const last: Record<string, number> = {}
@@ -45,14 +46,16 @@ export const maskText = (text: string) => {
       if (known !== undefined) return known
       const ph = placeholder(key, value)
       // 공백이 낀 값은 전체 치환하지 않는다 (줄바꿈·들여쓰기가 프롬프트 곳곳에서 바뀌는 것 방지)
-      if (value.length >= PROPAGATE_MIN && !/\s/.test(value)) keyedValues.set(value, ph)
+      if (value.length >= config.propagateMin && !/\s/.test(value)) keyedValues.set(value, ph)
       return ph
     },
+    isKey: key => config.enabled.has('secret_key') && isSecretKey(key),
   }
 
   let out = text
   const run = (rules: Rule[]) => {
     for (const rule of rules) {
+      if (rule.id !== null && !config.enabled.has(rule.id)) continue
       out = out.replace(rule.re, (m: string, ...rest: unknown[]) => rule.apply(ctx, m, groupsOf(rest)) ?? m)
     }
   }

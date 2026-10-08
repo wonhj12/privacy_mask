@@ -123,3 +123,13 @@ test('Luhn을 통과해도 카드사 대역(BIN)이 아니면 카드로 보지 �
   ])
   expect(seen).toBe('job-100-001-1:3100000000000003 / elapsed=34ms card=[카드번호#1] ****-4444')
 })
+
+test('설정: 끈 항목은 가리지 않는다', { options: { enable_phone: false, enable_secret_key: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['tel=01012345678 db.password=abc123 card=4111-1111-1111-1111'])
+  expect(seen).toBe('tel=01012345678 db.password=abc123 card=[카드번호#1] ****-1111')
+})
+
+test('설정: 전체 치환 최소 길이를 바꿀 수 있다', { options: { propagate_min: 3 } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['pw=abc url=/x?t=abc'])
+  expect(seen).toBe('pw=[pw#1] url=/x?t=[pw#1]')
+})
