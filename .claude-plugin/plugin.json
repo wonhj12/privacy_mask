@@ -1,7 +1,7 @@
 {
   "name": "privacy-mask",
   "version": "0.1.0",
-  "description": "프롬프트 전송 전 로컬에서 개인정보(주민번호·전화·이메일·카드·계좌) 마스킹",
+  "description": "프롬프트 전송 전 로컬에서 개인정보·비밀값 마스킹 (항목별 설정, 사용자 키·정규식)",
   "userConfig": {
     "enable_rrn": { "type": "boolean", "title": "주민·외국인등록번호", "description": "[주민번호#n]으로 전체 가림", "default": true },
     "enable_phone": { "type": "boolean", "title": "전화번호", "description": "[전화번호#n] 010-****-5678 (끝 4자리 노출)", "default": true },
