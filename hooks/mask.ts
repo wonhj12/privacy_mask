@@ -24,7 +24,8 @@ const groupsOf = (rest: unknown[]) => {
 export type Segment = { text: string; raw: boolean }
 
 // ### 바로 안쪽 양 끝이 공백·#이 아닐 때만 구분자 (### 제목, ##########와 구분). 여러 줄 가능
-const BYPASS = /(?<!#)###(?=[^\s#])([\s\S]*?[^\s#])###(?!#)/g
+// 여는 ###는 줄 처음이나 공백 뒤에서만 본다: 비밀번호 같은 값 속 ###(Ab###Cd###1)가 구간을 열면 값 일부가 그대로 나간다
+const BYPASS = /(?<!\S)###(?=[^\s#])([\s\S]*?[^\s#])###(?!#)/g
 
 export const splitBypass = (text: string): Segment[] => {
   const out: Segment[] = []

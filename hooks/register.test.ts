@@ -272,3 +272,8 @@ test('정규식 파일을 읽어 마스킹한다', { options: { patterns_file: '
   const [seen] = await submitAll($, on, ['id EMP123456'])
   expect(seen).toBe('id [사번#1]')
 })
+
+test('제외 구간: 값 한가운데의 ###는 구분자가 아니다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['db.password=Ab###Cd9xYz###Q1'])
+  expect(seen).toBe('db.password=[db.password#1]')
+})
