@@ -16,7 +16,7 @@ test('개인정보: 주민번호는 전부, 나머지는 뒷자리만 남긴다'
     'rrn=900101-1234567 tel=010-1234-5678 mail=hong@test.co.kr card=4111-1111-1111-1111 acct=110-123-456789',
   ])
   expect(seen).toBe(
-    'rrn=[주민번호#1] tel=[전화번호#1] 010-****-5678 mail=[이메일#1] ***@test.co.kr card=[카드번호#1] ****-1111 acct=[계좌번호#1] ****6789',
+    'rrn=[주민번호#1] tel=[전화번호#1] 010-****-5678 mail=[이메일#1] ****@test.co.kr card=[카드번호#1] ****-1111 acct=[계좌번호#1] 11*-***-****89',
   )
 })
 
@@ -93,13 +93,13 @@ test('비밀값: Authorization 헤더 · JDBC 접속 문자열 · Jasypt ENC · 
     'Authorization: Bearer abcdefghijklmnop.qrs jdbc:oracle:thin:scott/tiger@10.20.30.40:1521:ORCL pw=ENC(xyz123) jwt eyJhbGciOi.eyJzdWIiOi.sig',
   ])
   expect(seen).toBe(
-    'Authorization: Bearer [비밀값#3] jdbc:oracle:thin:scott/[비밀값#4]@10.***.***.40:1521:ORCL pw=[비밀값#2] jwt [비밀값#1]',
+    'Authorization: Bearer [인증토큰#1] jdbc:oracle:thin:scott/[접속비밀번호#1]@[IP#1] 10.***.***.40:1521:ORCL pw=[암호문#1] jwt [JWT#1]',
   )
 })
 
 test('IP는 첫·끝 옥텟만 남기고 localhost는 그대로', async ($, on) => {
   const [seen] = await submitAll($, on, ['from 192.168.0.1 to 127.0.0.1 at 2026-10-08'])
-  expect(seen).toBe('from 192.***.***.1 to 127.0.0.1 at 2026-10-08')
+  expect(seen).toBe('from [IP#1] 192.***.***.1 to 127.0.0.1 at 2026-10-08')
 })
 
 test('로그의 날짜·시각·epoch ms·일반 숫자·코드는 그대로 둔다', async ($, on) => {
@@ -113,7 +113,7 @@ test('하이픈으로 이어지는 파일명·문서번호는 계좌로 보지 �
     'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=110-123-456789.'
   const [seen] = await submitAll($, on, [text])
   expect(seen).toBe(
-    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] ****6789.',
+    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] 11*-***-****89.',
   )
 })
 
@@ -122,4 +122,174 @@ test('Luhn을 통과해도 카드사 대역(BIN)이 아니면 카드로 보지 �
     'job-100-001-1:3100000000000003 / elapsed=34ms card=5555555555554444',
   ])
   expect(seen).toBe('job-100-001-1:3100000000000003 / elapsed=34ms card=[카드번호#1] ****-4444')
+})
+
+test('설정: 끈 항목은 가리지 않는다', { options: { enable_phone: false, enable_secret_key: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['tel=01012345678 db.password=abc123 card=4111-1111-1111-1111'])
+  expect(seen).toBe('tel=01012345678 db.password=abc123 card=[카드번호#1] ****-1111')
+})
+
+test('설정: 전체 치환 최소 길이를 바꿀 수 있다', { options: { propagate_min: 3 } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['pw=abc url=/x?t=abc'])
+  expect(seen).toBe('pw=[pw#1] url=/x?t=[pw#1]')
+})
+
+test('일부 노출: 이메일 아이디·계좌는 앞뒤 2자, 같은 IP는 같은 번호', async ($, on) => {
+  const [seen] = await submitAll($, on, ['gildong.hong@test.co.kr 10.1.2.3 10.1.2.3 10.1.2.4'])
+  expect(seen).toBe(
+    '[이메일#1] gi*****.**ng@test.co.kr [IP#1] 10.***.***.3 [IP#1] 10.***.***.3 [IP#2] 10.***.***.4',
+  )
+})
+
+test('설정: 일부 노출 글자 수', { options: { partial_keep: 1 } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['acct=110-123-456789'])
+  expect(seen).toBe('acct=[계좌번호#1] 1**-***-*****9')
+})
+
+test('비밀값: 서비스 토큰은 종류별 라벨', async ($, on) => {
+  const aws = 'AKIA' + 'A'.repeat(16)
+  const gh = 'ghp_' + 'a'.repeat(36)
+  const [seen] = await submitAll($, on, [`k1=${aws} k2=${gh} k3=${aws}`])
+  expect(seen).toBe('k1=[AWS키#1] k2=[GitHub토큰#1] k3=[AWS키#1]')
+})
+
+test('운전면허·사업자번호는 계좌보다 먼저 구분하고, 체크섬이 틀리면 계좌로 본다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'lic=11-23-456789-01 old=서울 89-123456-78 biz=123-45-67891 bad=123-45-67890 other=99-23-456789-01',
+  ])
+  expect(seen).toBe(
+    'lic=[운전면허#1] old=[운전면허#2] biz=[사업자번호#1] 12*-**-***91 bad=[계좌번호#1] 12*-**-***90 other=[계좌번호#2] 99-**-******-01',
+  )
+})
+
+test('설정: 운전면허를 끄면 계좌 규칙이 잡는다', { options: { enable_driver_license: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['lic=11-23-456789-01'])
+  expect(seen).toBe('lic=[계좌번호#1] 11-**-******-01')
+})
+
+test('비밀값: 추가 서비스 토큰', async ($, on) => {
+  const t = {
+    google: 'AIza' + 'x'.repeat(35),
+    ghPat: 'github_pat_' + 'a'.repeat(22),
+    gitlab: 'glpat-' + 'b'.repeat(20),
+    stripe: 'sk_live_' + 'c'.repeat(24),
+    stripeR: 'rk_test_' + 'd'.repeat(24),
+    npm: 'npm_' + 'e'.repeat(36),
+    awsTmp: 'ASIA' + 'F'.repeat(16),
+    openaiProj: 'sk-proj-' + 'g'.repeat(20),
+  }
+  const [seen] = await submitAll($, on, [Object.values(t).join(' ')])
+  expect(seen).toBe(
+    '[Google키#1] [GitHub토큰#1] [GitLab토큰#1] [Stripe키#1] [Stripe키#2] [npm토큰#1] [AWS키#1] [OpenAI키#1]',
+  )
+})
+
+test('비밀값: 하이픈이 이어지는 sk- 단어는 토큰으로 보지 않는다', async ($, on) => {
+  const text = 'pip install sk-learn-model-training-pipeline'
+  const [seen] = await submitAll($, on, [text])
+  expect(seen).toBe(text)
+})
+
+test('비밀값: 웹훅 URL · Azure AccountKey', async ($, on) => {
+  const key = 'k'.repeat(20) + '=='
+  const [seen] = await submitAll($, on, [
+    `slack https://hooks.slack.com/services/T000/B000/XXXX discord https://discord.com/api/webhooks/123/abc-def az AccountName=demo;AccountKey=${key};EndpointSuffix=core.windows.net`,
+  ])
+  expect(seen).toBe(
+    'slack [웹훅URL#1] discord [웹훅URL#2] az AccountName=demo;AccountKey=[접속비밀번호#1];EndpointSuffix=core.windows.net',
+  )
+})
+
+test('비밀값: Cookie 헤더는 값 전체, CRLF 다음 줄은 그대로', async ($, on) => {
+  const [seen] = await submitAll($, on, ['Cookie: SESSION=abc123; theme=dark\r\nHost: x\n"set-cookie": "a=1"'])
+  expect(seen).toBe('Cookie: [쿠키#1]\r\nHost: x\n"set-cookie": "[쿠키#2]"')
+})
+
+test('개인정보 키: 이름은 다른 곳에 나와도 가리고, 기술 이름·userName은 건드리지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'custName=홍길동 주문자 홍길동 결제 cust_nm=김철수 fileName=a.txt tempName=x userName=hong',
+  ])
+  expect(seen).toBe(
+    'custName=[custName#1] 주문자 [custName#1] 결제 cust_nm=[cust_nm#1] fileName=a.txt tempName=x userName=hong',
+  )
+})
+
+test('개인정보 키: 생년월일·카드 부가정보, 짧은 숫자는 전체 치환하지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, [
+    'birthDate=19900101 dob=1990-01-01 cvc=123 cardExpiry=12/29 rebirth=yes again 19900101 123',
+  ])
+  expect(seen).toBe(
+    'birthDate=[birthDate#1] dob=[dob#1] cvc=[cvc#1] cardExpiry=[cardExpiry#1] rebirth=yes again [birthDate#1] 123',
+  )
+})
+
+test('사용자 키: 대소문자·_·- 무시, 마지막 . 뒤 이름도 비교', { options: { custom_keys: ['signKey', 'orderMemo'] } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['sign_key=abcdefgh order.orderMemo=부재시연락 note=부재시연락'])
+  expect(seen).toBe('sign_key=[sign_key#1] order.orderMemo=[order.orderMemo#1] note=[order.orderMemo#1]')
+})
+
+test('설정: 개인정보 문자 값 최소 길이 · 생년월일 키 끄기', { options: { propagate_min_text: 4, enable_birth_key: false } }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['custName=홍길동 주문자 홍길동 birth=19900101'])
+  expect(seen).toBe('custName=[custName#1] 주문자 홍길동 birth=19900101')
+})
+
+test('제외 구간: ###…### 안은 원문, 구분자는 지운다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###password=abc123### tel=010-1234-5678 ###a b### ###c###'])
+  expect(seen).toBe('password=abc123 tel=[전화번호#1] 010-****-5678 a b c')
+})
+
+test('제외 구간: 안의 키 값은 수집하지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###pw=abcdefg### other abcdefg'])
+  expect(seen).toBe('pw=abcdefg other abcdefg')
+})
+
+test('제외 구간: 제목·장식선·닫히지 않은 ###은 구분자가 아니다', async ($, on) => {
+  const text = '### 제목\npw=abcdef\n#### 소제목\n##########\n###열린'
+  const [seen] = await submitAll($, on, [text])
+  expect(seen).toBe('### 제목\npw=[pw#1]\n#### 소제목\n##########\n###열린')
+})
+
+test('제외 구간: 여러 줄', async ($, on) => {
+  const [seen] = await submitAll($, on, ['###line1\npw=abcdef###'])
+  expect(seen).toBe('line1\npw=abcdef')
+})
+
+const MISSING = { patterns_file: '/nonexistent/privacy-mask-patterns.json' }
+
+test('설정 오류: 정규식 파일을 못 읽으면 전송을 막는다', { options: MISSING }, async $ => {
+  const result = await $.prompt.submit({ text: 'hello' })
+  expect(result.drop).toBe('privacy-mask: 정규식 파일을 읽을 수 없습니다 (/nonexistent/privacy-mask-patterns.json)')
+})
+
+test('설정 오류여도 전체를 ###로 감싸면 보낸다', { options: MISSING }, async ($, on) => {
+  const [seen] = await submitAll($, on, ['###tel=010-1234-5678###'])
+  expect(seen).toBe('tel=010-1234-5678')
+})
+
+test('정규식 파일을 읽어 마스킹한다', { options: { patterns_file: '/x/patterns.json' } }, async ($, on) => {
+  // 테스트 환경에는 fs가 없어 fs.read 훅으로 파일 내용을 대신 준다
+  on('fs.read', () => ({ value: '[{"label":"사번","regex":"EMP\\\\d{6}"}]' }))
+  const [seen] = await submitAll($, on, ['id EMP123456'])
+  expect(seen).toBe('id [사번#1]')
+})
+
+test('제외 구간: 값 한가운데의 ###는 구분자가 아니다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['db.password=Ab###Cd9xYz###Q1'])
+  expect(seen).toBe('db.password=[db.password#1]')
+})
+
+test('키 값이 null·true 같은 리터럴이면 가리지 않는다', async ($, on) => {
+  const [seen] = await submitAll($, on, ['{"custName": null, "memo": null, "password": true}'])
+  expect(seen).toBe('{"custName": null, "memo": null, "password": true}')
+})
+
+test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$: any, e: any) => {
+    toasts.push(e.text ?? e.message ?? JSON.stringify(e))
+    return { value: undefined }
+  })
+  await submitAll($, on, ['custName=홍길동 then 홍길동 again'])
+  expect(toasts.join()).toContain('개인정보 2')
+  expect(toasts.join()).not.toContain('비밀값')
 })
