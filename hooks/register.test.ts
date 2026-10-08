@@ -265,3 +265,10 @@ test('설정 오류여도 전체를 ###로 감싸면 보낸다', { options: MISS
   const [seen] = await submitAll($, on, ['###tel=010-1234-5678###'])
   expect(seen).toBe('tel=010-1234-5678')
 })
+
+test('정규식 파일을 읽어 마스킹한다', { options: { patterns_file: '/x/patterns.json' } }, async ($, on) => {
+  // 테스트 환경에는 fs가 없어 fs.read 훅으로 파일 내용을 대신 준다
+  on('fs.read', () => ({ value: '[{"label":"사번","regex":"EMP\\\\d{6}"}]' }))
+  const [seen] = await submitAll($, on, ['id EMP123456'])
+  expect(seen).toBe('id [사번#1]')
+})
