@@ -1,0 +1,8 @@
+{
+  "name": "wonhajin",
+  "description": "wonhajin의 Claude Code 플러그인",
+  "owner": { "name": "wonhajin" },
+  "plugins": [
+    { "name": "privacy-mask", "source": "./" }
+  ]
+}
