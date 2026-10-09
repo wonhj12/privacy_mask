@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 // 각 텍스트를 차례로 제출하고, 플러그인을 거쳐 엔진에 닿은 텍스트를 돌려준다
 const submitAll = async ($: any, on: any, texts: string[]) => {
@@ -282,13 +282,70 @@ test('키 값이 null·true 같은 리터럴이면 가리지 않는다', async (
   expect(seen).toBe('{"custName": null, "memo": null, "password": true}')
 })
 
-test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
-  const toasts: string[] = []
-  on('ui.toast', (_$: any, e: any) => {
-    toasts.push(e.text ?? e.message ?? JSON.stringify(e))
-    return { value: undefined }
+const BAND = {
+  plugin: 'privacy-mask',
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 80 },
+} as const
+
+// 엔진 몫(제출 수신·빈 띠·시계)을 먼저 등록한다. 테스트가 $를 부른 뒤에는 훅을 더할 수 없다
+const setupBand = async ($: any, on: any, surface: 'terminal' | 'desktop' = 'terminal') => {
+  const clock = mock.clock(on)
+  on('prompt.submit', (_$: any, e: any) => ({ text: e.text }))
+  on('session.start', (_$: any, e: any) => e)
+  on('ui.render', (_$: any, e: any) => {
+    const { Box } = _$.ui.resolve(e)
+    return h(Box, null)
   })
-  await submitAll($, on, ['custName=홍길동 then 홍길동 again'])
-  expect(toasts.join()).toContain('개인정보 2')
-  expect(toasts.join()).not.toContain('비밀값')
+  const band = await $.ui.mount({ ...BAND, surface })
+  const submit = (text: string) => $.prompt.submit({ text })
+  const shown = async () => (await band.find({ text: '민감정보' }))?.text
+  return { clock, submit, shown }
+}
+
+test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('custName=홍길동 then 홍길동 again')
+  expect(await shown()).toContain('개인정보 2')
+  expect(await shown()).not.toContain('비밀값')
+})
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`알림: 입력창 위에 한 줄로 띄웠다가 5초 뒤 지운다 (${surface})`, async ($, on) => {
+    const { clock, submit, shown } = await setupBand($, on, surface)
+    expect(await shown()).toBeUndefined()
+
+    await submit('tel=010-1234-5678')
+    expect(await shown()).toContain('민감정보 1건 마스킹')
+
+    await clock.advance(4999)
+    expect(await shown()).toBeDefined()
+    await clock.advance(1)
+    expect(await shown()).toBeUndefined()
+  })
+}
+
+test('알림: 연달아 보내면 마지막 전송부터 5초를 센다', async ($, on) => {
+  const { clock, submit, shown } = await setupBand($, on)
+  await submit('tel=010-1234-5678')
+  await clock.advance(3000)
+  await submit('tel=010-1234-5678')
+  await clock.advance(3000)
+  expect(await shown()).toBeDefined()
+  await clock.advance(2000)
+  expect(await shown()).toBeUndefined()
+})
+
+test('알림: 가린 것이 없으면 띄우지 않는다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('그냥 질문입니다')
+  expect(await shown()).toBeUndefined()
+})
+
+test('알림: 모듈을 다시 불러오면(session.start) 남아 있던 알림을 지운다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('tel=010-1234-5678')
+  expect(await shown()).toBeDefined()
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  expect(await shown()).toBeUndefined()
 })
