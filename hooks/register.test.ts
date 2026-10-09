@@ -292,6 +292,7 @@ const BAND = {
 const setupBand = async ($: any, on: any, surface: 'terminal' | 'desktop' = 'terminal') => {
   const clock = mock.clock(on)
   on('prompt.submit', (_$: any, e: any) => ({ text: e.text }))
+  on('session.start', (_$: any, e: any) => e)
   on('ui.render', (_$: any, e: any) => {
     const { Box } = _$.ui.resolve(e)
     return h(Box, null)
@@ -338,5 +339,13 @@ test('알림: 연달아 보내면 마지막 전송부터 5초를 센다', async 
 test('알림: 가린 것이 없으면 띄우지 않는다', async ($, on) => {
   const { submit, shown } = await setupBand($, on)
   await submit('그냥 질문입니다')
+  expect(await shown()).toBeUndefined()
+})
+
+test('알림: 모듈을 다시 불러오면(session.start) 남아 있던 알림을 지운다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('tel=010-1234-5678')
+  expect(await shown()).toBeDefined()
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
   expect(await shown()).toBeUndefined()
 })

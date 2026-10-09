@@ -11,6 +11,11 @@ export const register: Register = (on, options) => {
   let hideTimer: Timer | undefined
   // 설정을 바꾸면 엔진이 모듈을 다시 불러 register가 새 options로 다시 돈다
   const { patternsFile, ...base } = configFromOptions(options)
+  // 다시 불러오면 타이머는 사라지고 $.state는 남는다. 지울 타이머가 없는 알림이 계속 떠 있지 않게 비운다
+  on('session.start', async ($, e, next) => {
+    await update($, notice, () => null)
+    return next(e)
+  })
   on('prompt.submit', async ($, e, next) => {
     // 전부 제외 구간이면 설정을 읽지 않는다 (설정 오류로 막힌 상황에서도 보낼 수 있게)
     const segments = splitBypass(e.text)
@@ -28,9 +33,9 @@ export const register: Register = (on, options) => {
     const result = await next({ ...e, text })
     const total = labels.reduce((s, k) => s + (counts[k] ?? 0), 0)
     const message = `민감정보 ${total}건 마스킹 (${labels.map(k => `${k} ${counts[k] ?? 0}`).join(', ')})`
-    await update($, notice, () => message)
     // 연달아 보내면 앞 타이머가 새 알림을 일찍 지우지 않도록 다시 건다
     hideTimer?.cancel()
+    await update($, notice, () => message)
     hideTimer = $.clock.after(NOTICE_MS, () => void update($, notice, () => null))
     return result
   }).catch(($, e, next) =>
