@@ -6,6 +6,7 @@
   "homepage": "https://github.com/wonhj12/privacy_mask",
   "repository": "https://github.com/wonhj12/privacy_mask",
   "license": "MIT",
+  "types": "./types/index.d.ts",
   "userConfig": {
     "enable_rrn": { "type": "boolean", "title": "주민·외국인등록번호", "description": "[주민번호#n]으로 전체 가림", "default": true },
     "enable_phone": { "type": "boolean", "title": "전화번호", "description": "[전화번호#n] 010-****-5678 (끝 4자리 노출)", "default": true },
