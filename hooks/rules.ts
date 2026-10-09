@@ -49,6 +49,9 @@ export const digitsOf = (s: string) => s.replace(/\D/g, '')
 
 const SEP = /[-. ]/
 
+// 가린 글자. '*'는 한 줄에 두 묶음 이상이면 화면의 마크다운이 강조 기호로 먹어 010--5678처럼 보인다
+const MASK = '•'
+
 // 구분자는 남기고, 구분자를 뺀 글자 중 앞 n자·뒤 n자만 보인다. 2n자 이하면 전부 가린다
 export const keepEnds = (s: string, n: number) => {
   const chars = [...s]
@@ -58,7 +61,7 @@ export const keepEnds = (s: string, n: number) => {
     .map(c => {
       if (SEP.test(c)) return c
       const idx = i++
-      return total > n * 2 && (idx < n || idx >= total - n) ? c : '*'
+      return total > n * 2 && (idx < n || idx >= total - n) ? c : MASK
     })
     .join('')
 }
@@ -305,7 +308,7 @@ export const PII_RULES: Rule[] = [
     re: /(?<!\d)(?:\d{4}[- ]?){3}\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
-      return isCardBin(d) && luhn(d) ? `${ctx.tag('카드번호', d)} ****-${d.slice(-4)}` : null
+      return isCardBin(d) && luhn(d) ? `${ctx.tag('카드번호', d)} ${MASK.repeat(4)}-${d.slice(-4)}` : null
     },
   },
   {
@@ -323,14 +326,14 @@ export const PII_RULES: Rule[] = [
     re: /(?<!\d)01[016789][- .]?\d{3,4}[- .]?\d{4}(?!\d)/g,
     apply: (ctx, m) => {
       const d = digitsOf(m)
-      return `${ctx.tag('전화번호', d)} ${d.slice(0, 3)}-****-${d.slice(-4)}`
+      return `${ctx.tag('전화번호', d)} ${d.slice(0, 3)}-${MASK.repeat(4)}-${d.slice(-4)}`
     },
   },
   {
     id: 'phone',
     // 지역번호는 구분자가 있을 때만 (숫자열 오탐 방지)
     re: /(?<!\d)(0(?:2|[3-6][1-5]|70))[-)]\d{3,4}-\d{4}(?!\d)/g,
-    apply: (ctx, m, g) => `${ctx.tag('전화번호', digitsOf(m))} ${g[0]}-****-${digitsOf(m).slice(-4)}`,
+    apply: (ctx, m, g) => `${ctx.tag('전화번호', digitsOf(m))} ${g[0]}-${MASK.repeat(4)}-${digitsOf(m).slice(-4)}`,
   },
   {
     // 지역 코드(11~26, 28)-연도-일련번호-검증 / 2014년 이전: 지역명 연도-일련번호-검증
@@ -366,7 +369,7 @@ export const PII_RULES: Rule[] = [
     re: /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\d|\.\d)/g,
     apply: (ctx, m, g) => {
       if (g.some(o => Number(o) > 255) || m === '127.0.0.1' || m === '0.0.0.0') return null
-      return `${ctx.tag('IP', m)} ${g[0]}.***.***.${g[3]}`
+      return `${ctx.tag('IP', m)} ${g[0]}.${MASK.repeat(3)}.${MASK.repeat(3)}.${g[3]}`
     },
   },
 ]

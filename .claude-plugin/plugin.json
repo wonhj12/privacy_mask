@@ -8,10 +8,10 @@
   "license": "MIT",
   "userConfig": {
     "enable_rrn": { "type": "boolean", "title": "주민·외국인등록번호", "description": "[주민번호#n]으로 전체 가림", "default": true },
-    "enable_phone": { "type": "boolean", "title": "전화번호", "description": "[전화번호#n] 010-****-5678 (끝 4자리 노출)", "default": true },
+    "enable_phone": { "type": "boolean", "title": "전화번호", "description": "[전화번호#n] 010-••••-5678 (끝 4자리 노출)", "default": true },
     "enable_driver_license": { "type": "boolean", "title": "운전면허번호", "description": "[운전면허#n]으로 전체 가림 (지역 코드 11~26·28)", "default": true },
     "enable_email": { "type": "boolean", "title": "이메일", "description": "[이메일#n] 뒤에 아이디 일부와 도메인 노출", "default": true },
-    "enable_card": { "type": "boolean", "title": "카드번호", "description": "[카드번호#n] ****-1111 (끝 4자리 노출)", "default": true },
+    "enable_card": { "type": "boolean", "title": "카드번호", "description": "[카드번호#n] ••••-1111 (끝 4자리 노출)", "default": true },
     "enable_biz_no": { "type": "boolean", "title": "사업자등록번호", "description": "체크섬이 맞는 000-00-00000, 앞뒤 일부 노출", "default": true },
     "enable_account": { "type": "boolean", "title": "계좌번호", "description": "하이픈으로 구분된 10~14자리 숫자", "default": true },
     "enable_ip": { "type": "boolean", "title": "IP", "description": "IPv4 첫·끝 옥텟만 노출", "default": true },

@@ -5,7 +5,7 @@ import { isAllBypass, maskText, splitBypass } from './mask.ts'
 const withPatterns = (patterns: { label: string; source: string; partial: boolean }[]) => ({ ...DEFAULT_CONFIG, patterns })
 
 test('maskText: 훅을 거치지 않고 직접 호출할 수 있다', () => {
-  expect(maskText('tel=010-1234-5678').text).toBe('tel=[전화번호#1] 010-****-5678')
+  expect(maskText('tel=010-1234-5678').text).toBe('tel=[전화번호#1] 010-••••-5678')
 })
 
 test('isAllBypass: 구간 밖이 공백뿐이면 전체 제외', () => {
@@ -20,7 +20,7 @@ test('사용자 정규식: 전체 가림 · 일부 노출', () => {
     { label: '여권번호', source: '[A-Z]\\d{8}', partial: true },
   ])
   expect(maskText('emp EMP123456 / passport M12345678 / EMP123456', config).text).toBe(
-    'emp [사번#1] / passport [여권번호#1] M1*****78 / [사번#1]',
+    'emp [사번#1] / passport [여권번호#1] M1•••••78 / [사번#1]',
   )
 })
 
