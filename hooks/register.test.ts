@@ -191,9 +191,8 @@ test('비밀값: 하이픈이 이어지는 sk- 단어는 토큰으로 보지 않
 })
 
 test('비밀값: 웹훅 URL · Azure AccountKey', async ($, on) => {
-  const key = 'k'.repeat(20) + '=='
   const [seen] = await submitAll($, on, [
-    `slack https://hooks.slack.com/services/T000/B000/XXXX discord https://discord.com/api/webhooks/123/abc-def az AccountName=demo;AccountKey=${key};EndpointSuffix=core.windows.net`,
+    'slack https://hooks.slack.com/services/T000/B000/XXXX discord https://discord.com/api/webhooks/123/abc-def az AccountName=demo;AccountKey=kkkkkkkkkkkkkkkkkkkk==;EndpointSuffix=core.windows.net',
   ])
   expect(seen).toBe(
     'slack [웹훅URL#1] discord [웹훅URL#2] az AccountName=demo;AccountKey=[접속비밀번호#1];EndpointSuffix=core.windows.net',
