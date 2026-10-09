@@ -128,8 +128,6 @@ claude plugin validate .   # 매니페스트·모듈 검사
 claude plugin test .       # hooks/*.test.ts 실행
 ```
 
-설계 문서와 계획은 `docs/superpowers/`에 있습니다.
-
 ## 라이선스
 
 MIT. 아이콘은 [Codicons](https://github.com/microsoft/vscode-codicons)의 `workspace-trusted`([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))에 배경과 색을 입혀 만들었습니다.
