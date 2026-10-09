@@ -6,6 +6,10 @@
   "homepage": "https://github.com/wonhj12/privacy_mask",
   "repository": "https://github.com/wonhj12/privacy_mask",
   "license": "MIT",
+  "keywords": ["privacy", "pii", "masking", "redaction", "secrets", "security", "korean", "개인정보", "마스킹"],
+  "documentationUrl": "https://github.com/wonhj12/privacy_mask#readme",
+  "supportUrl": "https://github.com/wonhj12/privacy_mask/issues",
+  "privacyPolicyUrl": "https://github.com/wonhj12/privacy_mask/blob/main/PRIVACY.md",
   "types": "./types/index.d.ts",
   "userConfig": {
     "enable_rrn": { "type": "boolean", "title": "주민·외국인등록번호", "description": "[주민번호#n]으로 전체 가림", "default": true },
