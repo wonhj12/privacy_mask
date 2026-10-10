@@ -140,8 +140,9 @@ claude --plugin-dir /path/to/privacy_mask
 ## 개발
 
 ```bash
-claude plugin validate .   # 매니페스트·모듈 검사
-claude plugin test .       # hooks/*.test.ts 실행
+claude plugin validate .claude-plugin/plugin.json   # 매니페스트·모듈 검사
+claude plugin validate .                            # 마켓플레이스 매니페스트 검사
+claude plugin test .                                # hooks/*.test.ts 실행
 ```
 
 ## 라이선스
