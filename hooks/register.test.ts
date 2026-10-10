@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 // 각 텍스트를 차례로 제출하고, 플러그인을 거쳐 엔진에 닿은 텍스트를 돌려준다
 const submitAll = async ($: any, on: any, texts: string[]) => {
@@ -16,7 +16,7 @@ test('개인정보: 주민번호는 전부, 나머지는 뒷자리만 남긴다'
     'rrn=900101-1234567 tel=010-1234-5678 mail=hong@test.co.kr card=4111-1111-1111-1111 acct=110-123-456789',
   ])
   expect(seen).toBe(
-    'rrn=[주민번호#1] tel=[전화번호#1] 010-****-5678 mail=[이메일#1] ****@test.co.kr card=[카드번호#1] ****-1111 acct=[계좌번호#1] 11*-***-****89',
+    'rrn=[주민번호#1] tel=[전화번호#1] 010-••••-5678 mail=[이메일#1] ••••@test.co.kr card=[카드번호#1] ••••-1111 acct=[계좌번호#1] 11•-•••-••••89',
   )
 })
 
@@ -26,8 +26,8 @@ test('같은 값은 같은 번호 (구분자 차이 무시), 번호는 프롬프
     'd=010-9999-0000',
   ])
   expect(seen).toEqual([
-    'a=[전화번호#1] 010-****-5678 b=[전화번호#2] 010-****-0000 c=[전화번호#1] 010-****-5678',
-    'd=[전화번호#1] 010-****-0000',
+    'a=[전화번호#1] 010-••••-5678 b=[전화번호#2] 010-••••-0000 c=[전화번호#1] 010-••••-5678',
+    'd=[전화번호#1] 010-••••-0000',
   ])
 })
 
@@ -93,13 +93,13 @@ test('비밀값: Authorization 헤더 · JDBC 접속 문자열 · Jasypt ENC · 
     'Authorization: Bearer abcdefghijklmnop.qrs jdbc:oracle:thin:scott/tiger@10.20.30.40:1521:ORCL pw=ENC(xyz123) jwt eyJhbGciOi.eyJzdWIiOi.sig',
   ])
   expect(seen).toBe(
-    'Authorization: Bearer [인증토큰#1] jdbc:oracle:thin:scott/[접속비밀번호#1]@[IP#1] 10.***.***.40:1521:ORCL pw=[암호문#1] jwt [JWT#1]',
+    'Authorization: Bearer [인증토큰#1] jdbc:oracle:thin:scott/[접속비밀번호#1]@[IP#1] 10.•••.•••.40:1521:ORCL pw=[암호문#1] jwt [JWT#1]',
   )
 })
 
 test('IP는 첫·끝 옥텟만 남기고 localhost는 그대로', async ($, on) => {
   const [seen] = await submitAll($, on, ['from 192.168.0.1 to 127.0.0.1 at 2026-10-08'])
-  expect(seen).toBe('from [IP#1] 192.***.***.1 to 127.0.0.1 at 2026-10-08')
+  expect(seen).toBe('from [IP#1] 192.•••.•••.1 to 127.0.0.1 at 2026-10-08')
 })
 
 test('로그의 날짜·시각·epoch ms·일반 숫자·코드는 그대로 둔다', async ($, on) => {
@@ -113,7 +113,7 @@ test('하이픈으로 이어지는 파일명·문서번호는 계좌로 보지 �
     'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=110-123-456789.'
   const [seen] = await submitAll($, on, [text])
   expect(seen).toBe(
-    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] 11*-***-****89.',
+    'fileName: 10000-0001-0002-1-1-2026-report-final.pdf, doc-110-123-456789 acct=[계좌번호#1] 11•-•••-••••89.',
   )
 })
 
@@ -121,12 +121,12 @@ test('Luhn을 통과해도 카드사 대역(BIN)이 아니면 카드로 보지 �
   const [seen] = await submitAll($, on, [
     'job-100-001-1:3100000000000003 / elapsed=34ms card=5555555555554444',
   ])
-  expect(seen).toBe('job-100-001-1:3100000000000003 / elapsed=34ms card=[카드번호#1] ****-4444')
+  expect(seen).toBe('job-100-001-1:3100000000000003 / elapsed=34ms card=[카드번호#1] ••••-4444')
 })
 
 test('설정: 끈 항목은 가리지 않는다', { options: { enable_phone: false, enable_secret_key: false } }, async ($, on) => {
   const [seen] = await submitAll($, on, ['tel=01012345678 db.password=abc123 card=4111-1111-1111-1111'])
-  expect(seen).toBe('tel=01012345678 db.password=abc123 card=[카드번호#1] ****-1111')
+  expect(seen).toBe('tel=01012345678 db.password=abc123 card=[카드번호#1] ••••-1111')
 })
 
 test('설정: 전체 치환 최소 길이를 바꿀 수 있다', { options: { propagate_min: 3 } }, async ($, on) => {
@@ -137,13 +137,13 @@ test('설정: 전체 치환 최소 길이를 바꿀 수 있다', { options: { pr
 test('일부 노출: 이메일 아이디·계좌는 앞뒤 2자, 같은 IP는 같은 번호', async ($, on) => {
   const [seen] = await submitAll($, on, ['gildong.hong@test.co.kr 10.1.2.3 10.1.2.3 10.1.2.4'])
   expect(seen).toBe(
-    '[이메일#1] gi*****.**ng@test.co.kr [IP#1] 10.***.***.3 [IP#1] 10.***.***.3 [IP#2] 10.***.***.4',
+    '[이메일#1] gi•••••.••ng@test.co.kr [IP#1] 10.•••.•••.3 [IP#1] 10.•••.•••.3 [IP#2] 10.•••.•••.4',
   )
 })
 
 test('설정: 일부 노출 글자 수', { options: { partial_keep: 1 } }, async ($, on) => {
   const [seen] = await submitAll($, on, ['acct=110-123-456789'])
-  expect(seen).toBe('acct=[계좌번호#1] 1**-***-*****9')
+  expect(seen).toBe('acct=[계좌번호#1] 1••-•••-•••••9')
 })
 
 test('비밀값: 서비스 토큰은 종류별 라벨', async ($, on) => {
@@ -158,13 +158,13 @@ test('운전면허·사업자번호는 계좌보다 먼저 구분하고, 체크�
     'lic=11-23-456789-01 old=서울 89-123456-78 biz=123-45-67891 bad=123-45-67890 other=99-23-456789-01',
   ])
   expect(seen).toBe(
-    'lic=[운전면허#1] old=[운전면허#2] biz=[사업자번호#1] 12*-**-***91 bad=[계좌번호#1] 12*-**-***90 other=[계좌번호#2] 99-**-******-01',
+    'lic=[운전면허#1] old=[운전면허#2] biz=[사업자번호#1] 12•-••-•••91 bad=[계좌번호#1] 12•-••-•••90 other=[계좌번호#2] 99-••-••••••-01',
   )
 })
 
 test('설정: 운전면허를 끄면 계좌 규칙이 잡는다', { options: { enable_driver_license: false } }, async ($, on) => {
   const [seen] = await submitAll($, on, ['lic=11-23-456789-01'])
-  expect(seen).toBe('lic=[계좌번호#1] 11-**-******-01')
+  expect(seen).toBe('lic=[계좌번호#1] 11-••-••••••-01')
 })
 
 test('비밀값: 추가 서비스 토큰', async ($, on) => {
@@ -234,7 +234,7 @@ test('설정: 개인정보 문자 값 최소 길이 · 생년월일 키 끄기',
 
 test('제외 구간: ###…### 안은 원문, 구분자는 지운다', async ($, on) => {
   const [seen] = await submitAll($, on, ['###password=abc123### tel=010-1234-5678 ###a b### ###c###'])
-  expect(seen).toBe('password=abc123 tel=[전화번호#1] 010-****-5678 a b c')
+  expect(seen).toBe('password=abc123 tel=[전화번호#1] 010-••••-5678 a b c')
 })
 
 test('제외 구간: 안의 키 값은 수집하지 않는다', async ($, on) => {
@@ -282,13 +282,70 @@ test('키 값이 null·true 같은 리터럴이면 가리지 않는다', async (
   expect(seen).toBe('{"custName": null, "memo": null, "password": true}')
 })
 
-test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
-  const toasts: string[] = []
-  on('ui.toast', (_$: any, e: any) => {
-    toasts.push(e.text ?? e.message ?? JSON.stringify(e))
-    return { value: undefined }
+const BAND = {
+  plugin: 'privacy-mask',
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 80 },
+} as const
+
+// 엔진 몫(제출 수신·빈 띠·시계)을 먼저 등록한다. 테스트가 $를 부른 뒤에는 훅을 더할 수 없다
+const setupBand = async ($: any, on: any, surface: 'terminal' | 'desktop' = 'terminal') => {
+  const clock = mock.clock(on)
+  on('prompt.submit', (_$: any, e: any) => ({ text: e.text }))
+  on('session.start', (_$: any, e: any) => e)
+  on('ui.render', (_$: any, e: any) => {
+    const { Box } = _$.ui.resolve(e)
+    return h(Box, null)
   })
-  await submitAll($, on, ['custName=홍길동 then 홍길동 again'])
-  expect(toasts.join()).toContain('개인정보 2')
-  expect(toasts.join()).not.toContain('비밀값')
+  const band = await $.ui.mount({ ...BAND, surface })
+  const submit = (text: string) => $.prompt.submit({ text })
+  const shown = async () => (await band.find({ text: '민감정보' }))?.text
+  return { clock, submit, shown }
+}
+
+test('알림 집계: 전체 치환된 개인정보 값은 개인정보로 센다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('custName=홍길동 then 홍길동 again')
+  expect(await shown()).toContain('개인정보 2')
+  expect(await shown()).not.toContain('비밀값')
+})
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`알림: 입력창 위에 한 줄로 띄웠다가 5초 뒤 지운다 (${surface})`, async ($, on) => {
+    const { clock, submit, shown } = await setupBand($, on, surface)
+    expect(await shown()).toBeUndefined()
+
+    await submit('tel=010-1234-5678')
+    expect(await shown()).toContain('민감정보 1건 마스킹')
+
+    await clock.advance(4999)
+    expect(await shown()).toBeDefined()
+    await clock.advance(1)
+    expect(await shown()).toBeUndefined()
+  })
+}
+
+test('알림: 연달아 보내면 마지막 전송부터 5초를 센다', async ($, on) => {
+  const { clock, submit, shown } = await setupBand($, on)
+  await submit('tel=010-1234-5678')
+  await clock.advance(3000)
+  await submit('tel=010-1234-5678')
+  await clock.advance(3000)
+  expect(await shown()).toBeDefined()
+  await clock.advance(2000)
+  expect(await shown()).toBeUndefined()
+})
+
+test('알림: 가린 것이 없으면 띄우지 않는다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('그냥 질문입니다')
+  expect(await shown()).toBeUndefined()
+})
+
+test('알림: 모듈을 다시 불러오면(session.start) 남아 있던 알림을 지운다', async ($, on) => {
+  const { submit, shown } = await setupBand($, on)
+  await submit('tel=010-1234-5678')
+  expect(await shown()).toBeDefined()
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  expect(await shown()).toBeUndefined()
 })
