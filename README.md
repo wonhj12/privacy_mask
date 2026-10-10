@@ -125,7 +125,7 @@ tel=010-1234-5678 db.password=abc123
 ## 설치
 
 ```bash
-claude plugin marketplace add wonhj12/privacy_mask@main
+claude plugin marketplace add wonhajin/privacy_mask@main
 claude plugin install privacy-mask@wonhajin
 ```
 

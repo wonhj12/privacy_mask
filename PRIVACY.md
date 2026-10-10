@@ -35,4 +35,4 @@ privacy-mask(이하 "플러그인")가 데이터를 어떻게 다루는지 설�
 
 ## 문의
 
-[GitHub Issues](https://github.com/wonhj12/privacy_mask/issues)로 문의해 주세요.
+[GitHub Issues](https://github.com/wonhajin/privacy_mask/issues)로 문의해 주세요.
